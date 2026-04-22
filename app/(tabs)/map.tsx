@@ -1,18 +1,3 @@
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import MapboxGL from "@rnmapbox/maps";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Linking,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { IconSymbol } from "@/components/ui/icon-symbol";
 import { env } from "@/config/env";
 import { setDestination, setOrigin } from "@/features/route/routeSlice";
 import { useCurrentLocation } from "@/hooks/use-current-location";
@@ -27,6 +12,22 @@ import {
   type MapboxPlaceSuggestion,
 } from "@/services/mapbox.service";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import MapboxGL from "@rnmapbox/maps";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Linking,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { styles } from "./map.styles";
 
@@ -459,134 +460,144 @@ export default function MapTabScreen() {
           <Pressable style={styles.dismissOverlay} onPress={dismissOverlay} />
         ) : null}
 
-        <View
-          style={[styles.searchCard, { marginTop: insets.top + 8 }]}
-          pointerEvents="auto"
+        <SafeAreaView
+          style={styles.safeAreaTop}
+          pointerEvents="box-none"
+          edges={["top"]}
         >
-          <View style={styles.searchRow}>
-            <Text style={[styles.searchLabel, styles.originLabel]}>
-              Point A (Origin)
-            </Text>
-            <View style={styles.inputRow}>
-              <View style={styles.inputIcon}>
-                <MaterialIcons
-                  name="radio-button-checked"
-                  size={18}
-                  color="#2563EB"
+          <View
+            style={[styles.searchCard, { marginTop: 8 }]}
+            pointerEvents="auto"
+          >
+            <View style={styles.searchRow}>
+              <Text style={[styles.searchLabel, styles.originLabel]}>
+                Point A (Origin)
+              </Text>
+              <View style={styles.inputRow}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons
+                    name="radio-button-checked"
+                    size={18}
+                    color="#2563EB"
+                  />
+                </View>
+                <TextInput
+                  value={originText}
+                  onChangeText={setOriginText}
+                  placeholder="Search origin"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.searchInput}
+                  onFocus={() => setActiveField("origin")}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  clearButtonMode="while-editing"
                 />
+                {activeField === "origin" && originText.length > 0 ? (
+                  <Pressable
+                    style={styles.clearButton}
+                    onPress={() => setOriginText("")}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
+                  </Pressable>
+                ) : null}
               </View>
-              <TextInput
-                value={originText}
-                onChangeText={setOriginText}
-                placeholder="Search origin"
-                placeholderTextColor="#9CA3AF"
-                style={styles.searchInput}
-                onFocus={() => setActiveField("origin")}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-              />
-              {activeField === "origin" && originText.length > 0 ? (
-                <Pressable
-                  style={styles.clearButton}
-                  onPress={() => setOriginText("")}
-                  hitSlop={8}
-                >
-                  <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
-                </Pressable>
-              ) : null}
+            </View>
 
-              {canSwap ? (
+            {canSwap ? (
+              <View style={styles.swapBetweenRow} pointerEvents="box-none">
                 <Pressable
-                  style={styles.rowActionButton}
+                  style={styles.swapBetweenButton}
                   onPress={handleSwapPress}
-                  hitSlop={8}
+                  hitSlop={10}
+                  pointerEvents="auto"
                 >
                   <MaterialIcons name="swap-vert" size={18} color="#2563EB" />
                 </Pressable>
-              ) : null}
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.searchRow}>
-            <Text style={[styles.searchLabel, styles.destinationLabel]}>
-              Point B (Destination)
-            </Text>
-            <View style={styles.inputRow}>
-              <View style={styles.inputIcon}>
-                <MaterialIcons name="place" size={18} color="#F97316" />
               </View>
-              <TextInput
-                value={destinationText}
-                onChangeText={setDestinationText}
-                placeholder="Search destination"
-                placeholderTextColor="#9CA3AF"
-                style={styles.searchInput}
-                onFocus={() => setActiveField("destination")}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-              />
-              {activeField === "destination" && destinationText.length > 0 ? (
-                <Pressable
-                  style={styles.clearButton}
-                  onPress={() => setDestinationText("")}
-                  hitSlop={8}
-                >
-                  <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
-                </Pressable>
-              ) : null}
+            ) : null}
+
+            <View style={styles.divider} />
+
+            <View style={styles.searchRow}>
+              <Text style={[styles.searchLabel, styles.destinationLabel]}>
+                Point B (Destination)
+              </Text>
+              <View style={styles.inputRow}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons name="place" size={18} color="#F97316" />
+                </View>
+                <TextInput
+                  value={destinationText}
+                  onChangeText={setDestinationText}
+                  placeholder="Search destination"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.searchInput}
+                  onFocus={() => setActiveField("destination")}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  clearButtonMode="while-editing"
+                />
+                {activeField === "destination" && destinationText.length > 0 ? (
+                  <Pressable
+                    style={styles.clearButton}
+                    onPress={() => setDestinationText("")}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
+
+            {activeField ? (
+              <View style={styles.suggestionsContainer}>
+                {query.trim().length > 0 && query.trim().length < 3 ? (
+                  <Text style={styles.suggestionsHint}>
+                    Type at least 3 characters.
+                  </Text>
+                ) : null}
+                {placesError ? (
+                  <Text style={styles.suggestionsHint}>{placesError}</Text>
+                ) : null}
+                {isSearchingPlaces ? (
+                  <Text style={styles.suggestionsHint}>Searching…</Text>
+                ) : null}
+                {!isSearchingPlaces &&
+                query.trim().length >= 3 &&
+                suggestions.length === 0 &&
+                !placesError ? (
+                  <Text style={styles.suggestionsHint}>No results.</Text>
+                ) : null}
+
+                <FlatList
+                  keyboardShouldPersistTaps="handled"
+                  data={suggestions}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderSuggestionItem}
+                  ItemSeparatorComponent={renderSuggestionSeparator}
+                />
+              </View>
+            ) : null}
           </View>
 
-          {activeField ? (
-            <View style={styles.suggestionsContainer}>
-              {query.trim().length > 0 && query.trim().length < 3 ? (
-                <Text style={styles.suggestionsHint}>
-                  Type at least 3 characters.
-                </Text>
-              ) : null}
-              {placesError ? (
-                <Text style={styles.suggestionsHint}>{placesError}</Text>
-              ) : null}
-              {isSearchingPlaces ? (
-                <Text style={styles.suggestionsHint}>Searching…</Text>
-              ) : null}
-              {!isSearchingPlaces &&
-              query.trim().length >= 3 &&
-              suggestions.length === 0 &&
-              !placesError ? (
-                <Text style={styles.suggestionsHint}>No results.</Text>
-              ) : null}
-
-              <FlatList
-                keyboardShouldPersistTaps="handled"
-                data={suggestions}
-                keyExtractor={(item) => item.id}
-                renderItem={renderSuggestionItem}
-                ItemSeparatorComponent={renderSuggestionSeparator}
-              />
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.belowCardActions}>
-          <Pressable
-            style={styles.belowCardIconButton}
-            onPress={handleUseCurrentLocationPress}
-            hitSlop={8}
-          >
-            {isSettingOriginFromLocation ? (
-              <ActivityIndicator size="small" color="#2563EB" />
-            ) : (
-              <MaterialIcons name="my-location" size={18} color="#2563EB" />
-            )}
-          </Pressable>
-        </View>
+          <View style={styles.belowCardActions} pointerEvents="box-none">
+            <Pressable
+              style={styles.belowCardIconButton}
+              onPress={handleUseCurrentLocationPress}
+              hitSlop={8}
+              pointerEvents="auto"
+            >
+              {isSettingOriginFromLocation ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : (
+                <MaterialIcons name="my-location" size={18} color="#2563EB" />
+              )}
+            </Pressable>
+          </View>
+        </SafeAreaView>
 
         {isLoadingRoute ? (
           <View style={styles.banner}>
@@ -672,7 +683,7 @@ export default function MapTabScreen() {
           onPress={handleRecenterPress}
           hitSlop={10}
         >
-          <IconSymbol size={20} name="location.fill" color="#2563EB" />
+          <MaterialIcons name="center-focus-strong" size={20} color="#2563EB" />
         </Pressable>
       </View>
     </View>
