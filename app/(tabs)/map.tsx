@@ -18,11 +18,14 @@ import { setDestination, setOrigin } from "@/features/route/routeSlice";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 import { useDirections } from "@/hooks/use-directions";
 import { usePlaces } from "@/hooks/use-places";
-import { reverseGeocode, type MapboxPlaceSuggestion } from "@/services/mapbox.service";
 import {
   getCurrentLocation,
   requestForegroundLocationPermission,
 } from "@/services/location.service";
+import {
+  reverseGeocode,
+  type MapboxPlaceSuggestion,
+} from "@/services/mapbox.service";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 import { styles } from "./map.styles";
@@ -262,7 +265,7 @@ export default function MapTabScreen() {
     routeSummary && !isLoadingRoute && !routeError,
   );
   const recenterBottomOffset =
-    Math.max(12, insets.bottom + 12) + (shouldShowRouteSummary ? 88 : 0);
+    Math.max(12, insets.bottom + 12) + (shouldShowRouteSummary ? 100 : 0);
 
   const handleRecenterPress = useCallback(() => {
     if (routeBounds) {
@@ -460,43 +463,23 @@ export default function MapTabScreen() {
           style={[styles.searchCard, { marginTop: insets.top + 8 }]}
           pointerEvents="auto"
         >
-          <Pressable
-            style={styles.currentLocationButton}
-            onPress={handleUseCurrentLocationPress}
-            hitSlop={8}
-          >
-            {isSettingOriginFromLocation ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <MaterialIcons name="my-location" size={18} color="#fff" />
-            )}
-          </Pressable>
-
-          {canSwap ? (
-            <Pressable
-              style={styles.swapButton}
-              onPress={handleSwapPress}
-              hitSlop={8}
-            >
-              <MaterialIcons name="swap-vert" size={18} color="#fff" />
-            </Pressable>
-          ) : null}
-
           <View style={styles.searchRow}>
-            <Text style={styles.searchLabel}>Origin</Text>
+            <Text style={[styles.searchLabel, styles.originLabel]}>
+              Point A (Origin)
+            </Text>
             <View style={styles.inputRow}>
               <View style={styles.inputIcon}>
-                <IconSymbol
-                  size={16}
-                  name="circle.fill"
-                  color="rgba(255,255,255,0.75)"
+                <MaterialIcons
+                  name="radio-button-checked"
+                  size={18}
+                  color="#2563EB"
                 />
               </View>
               <TextInput
                 value={originText}
                 onChangeText={setOriginText}
                 placeholder="Search origin"
-                placeholderTextColor="rgba(255,255,255,0.55)"
+                placeholderTextColor="#9CA3AF"
                 style={styles.searchInput}
                 onFocus={() => setActiveField("origin")}
                 autoCorrect={false}
@@ -510,11 +493,17 @@ export default function MapTabScreen() {
                   onPress={() => setOriginText("")}
                   hitSlop={8}
                 >
-                  <IconSymbol
-                    size={18}
-                    name="xmark.circle.fill"
-                    color="rgba(255,255,255,0.55)"
-                  />
+                  <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
+                </Pressable>
+              ) : null}
+
+              {canSwap ? (
+                <Pressable
+                  style={styles.rowActionButton}
+                  onPress={handleSwapPress}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="swap-vert" size={18} color="#2563EB" />
                 </Pressable>
               ) : null}
             </View>
@@ -523,20 +512,18 @@ export default function MapTabScreen() {
           <View style={styles.divider} />
 
           <View style={styles.searchRow}>
-            <Text style={styles.searchLabel}>Destination</Text>
+            <Text style={[styles.searchLabel, styles.destinationLabel]}>
+              Point B (Destination)
+            </Text>
             <View style={styles.inputRow}>
               <View style={styles.inputIcon}>
-                <IconSymbol
-                  size={16}
-                  name="mappin.circle.fill"
-                  color="rgba(255,255,255,0.75)"
-                />
+                <MaterialIcons name="place" size={18} color="#F97316" />
               </View>
               <TextInput
                 value={destinationText}
                 onChangeText={setDestinationText}
                 placeholder="Search destination"
-                placeholderTextColor="rgba(255,255,255,0.55)"
+                placeholderTextColor="#9CA3AF"
                 style={styles.searchInput}
                 onFocus={() => setActiveField("destination")}
                 autoCorrect={false}
@@ -550,11 +537,7 @@ export default function MapTabScreen() {
                   onPress={() => setDestinationText("")}
                   hitSlop={8}
                 >
-                  <IconSymbol
-                    size={18}
-                    name="xmark.circle.fill"
-                    color="rgba(255,255,255,0.55)"
-                  />
+                  <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
                 </Pressable>
               ) : null}
             </View>
@@ -589,6 +572,20 @@ export default function MapTabScreen() {
               />
             </View>
           ) : null}
+        </View>
+
+        <View style={styles.belowCardActions}>
+          <Pressable
+            style={styles.belowCardIconButton}
+            onPress={handleUseCurrentLocationPress}
+            hitSlop={8}
+          >
+            {isSettingOriginFromLocation ? (
+              <ActivityIndicator size="small" color="#2563EB" />
+            ) : (
+              <MaterialIcons name="my-location" size={18} color="#2563EB" />
+            )}
+          </Pressable>
         </View>
 
         {isLoadingRoute ? (
@@ -675,7 +672,7 @@ export default function MapTabScreen() {
           onPress={handleRecenterPress}
           hitSlop={10}
         >
-          <IconSymbol size={20} name="location.fill" color="#fff" />
+          <IconSymbol size={20} name="location.fill" color="#2563EB" />
         </Pressable>
       </View>
     </View>
