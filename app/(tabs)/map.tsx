@@ -1,3 +1,4 @@
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import MapboxGL from "@rnmapbox/maps";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
@@ -49,6 +50,26 @@ export default function MapTabScreen() {
   const [destinationText, setDestinationText] = React.useState(
     destination?.placeName ?? "",
   );
+
+  const canSwap = Boolean(
+    origin ||
+    destination ||
+    originText.trim().length > 0 ||
+    destinationText.trim().length > 0,
+  );
+
+  const handleSwapPress = useCallback(() => {
+    if (!canSwap) return;
+
+    const nextOrigin = destination;
+    const nextDestination = origin;
+
+    setActiveField(null);
+    dispatch(setOrigin(nextOrigin));
+    dispatch(setDestination(nextDestination));
+    setOriginText(nextOrigin?.placeName ?? "");
+    setDestinationText(nextDestination?.placeName ?? "");
+  }, [canSwap, destination, dispatch, origin]);
 
   useEffect(() => {
     if (!activeField || activeField !== "origin") {
@@ -391,6 +412,16 @@ export default function MapTabScreen() {
           style={[styles.searchCard, { marginTop: insets.top + 8 }]}
           pointerEvents="auto"
         >
+          {canSwap ? (
+            <Pressable
+              style={styles.swapButton}
+              onPress={handleSwapPress}
+              hitSlop={8}
+            >
+              <MaterialIcons name="swap-vert" size={18} color="#fff" />
+            </Pressable>
+          ) : null}
+
           <View style={styles.searchRow}>
             <Text style={styles.searchLabel}>Origin</Text>
             <View style={styles.inputRow}>
