@@ -86,8 +86,9 @@ export const searchPlaces = async (
       params: {
         access_token: params.accessToken,
         autocomplete: true,
-        limit: 8,
-        types: "address,poi,place,locality,neighborhood",
+        limit: 10,
+        types:
+          "poi,address,place,locality,neighborhood,district,region,postcode",
         country: params.country ?? "id",
         language: params.language ?? "id",
         fuzzyMatch: true,

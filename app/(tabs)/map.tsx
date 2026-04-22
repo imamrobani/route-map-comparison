@@ -491,7 +491,6 @@ export default function MapTabScreen() {
                   autoCorrect={false}
                   autoCapitalize="none"
                   returnKeyType="search"
-                  clearButtonMode="while-editing"
                 />
                 {activeField === "origin" && originText.length > 0 ? (
                   <Pressable
@@ -538,7 +537,6 @@ export default function MapTabScreen() {
                   autoCorrect={false}
                   autoCapitalize="none"
                   returnKeyType="search"
-                  clearButtonMode="while-editing"
                 />
                 {activeField === "destination" && destinationText.length > 0 ? (
                   <Pressable
