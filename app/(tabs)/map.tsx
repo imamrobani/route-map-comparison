@@ -130,6 +130,33 @@ export default function MapTabScreen() {
     };
   }, [route]);
 
+  const routeSummary = useMemo(() => {
+    if (!route) return null;
+
+    const durationSeconds = route.durationSeconds;
+    const distanceMeters = route.distanceMeters;
+
+    if (
+      typeof durationSeconds !== "number" ||
+      typeof distanceMeters !== "number" ||
+      !Number.isFinite(durationSeconds) ||
+      !Number.isFinite(distanceMeters)
+    ) {
+      return null;
+    }
+
+    const minutes = Math.max(1, Math.round(durationSeconds / 60));
+    const distanceKm = distanceMeters / 1000;
+
+    return {
+      etaText: `${minutes} min`,
+      distanceText:
+        distanceKm >= 10
+          ? `${distanceKm.toFixed(0)} km`
+          : `${distanceKm.toFixed(1)} km`,
+    };
+  }, [route]);
+
   const dismissOverlay = useCallback(() => {
     setActiveField(null);
   }, []);
@@ -450,6 +477,29 @@ export default function MapTabScreen() {
               <Pressable style={styles.button} onPress={refreshLocation}>
                 <Text style={styles.buttonText}>Retry</Text>
               </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {routeSummary && !isLoadingRoute && !routeError ? (
+          <View
+            style={[
+              styles.routeSummaryCard,
+              { marginBottom: Math.max(12, insets.bottom + 12) },
+            ]}
+          >
+            <View style={styles.routeSummaryRow}>
+              <Text style={styles.routeSummaryLabel}>ETA</Text>
+              <Text style={styles.routeSummaryValue}>
+                {routeSummary.etaText}
+              </Text>
+            </View>
+            <View style={styles.routeSummaryDivider} />
+            <View style={styles.routeSummaryRow}>
+              <Text style={styles.routeSummaryLabel}>Distance</Text>
+              <Text style={styles.routeSummaryValue}>
+                {routeSummary.distanceText}
+              </Text>
             </View>
           </View>
         ) : null}
