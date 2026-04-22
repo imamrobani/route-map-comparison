@@ -15,7 +15,7 @@ import { env } from "@/config/env";
 import { setDestination, setOrigin } from "@/features/route/routeSlice";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 import { useDirections } from "@/hooks/use-directions";
-import { usePlaceAutocomplete } from "@/hooks/use-place-autocomplete";
+import { usePlaces } from "@/hooks/use-places";
 import type { MapboxPlaceSuggestion } from "@/services/mapbox.service";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
@@ -72,7 +72,7 @@ export default function MapTabScreen() {
     error: placesError,
     isLoading: isSearchingPlaces,
     suggestions,
-  } = usePlaceAutocomplete(query, {
+  } = usePlaces(query, {
     enabled: Boolean(activeField),
     proximity: location
       ? { latitude: location.latitude, longitude: location.longitude }

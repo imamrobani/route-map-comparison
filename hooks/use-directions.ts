@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { env } from "@/config/env";
 import { setError, setLoading, setRoute } from "@/features/route/routeSlice";
 import type { Coordinate } from "@/features/route/types";
+import { isAbortError, toErrorMessage } from "@/services/errors";
 import { getDirectionsRoute } from "@/services/mapbox.service";
 import { useAppDispatch } from "@/store/hooks";
 
@@ -74,11 +75,11 @@ export const useDirections = (
         }
 
         dispatch(setRoute(route));
-      } catch {
+      } catch (error) {
         if (!isActive) return;
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || isAbortError(error)) return;
         dispatch(setRoute(null));
-        dispatch(setError("Failed to fetch route."));
+        dispatch(setError(toErrorMessage(error, "Failed to fetch route.")));
       } finally {
         if (!isActive) return;
         dispatch(setLoading(false));

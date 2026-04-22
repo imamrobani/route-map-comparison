@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { env } from "@/config/env";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { isAbortError, toErrorMessage } from "@/services/errors";
 import {
   searchPlaces,
   type MapboxPlaceSuggestion,
@@ -87,11 +88,11 @@ export const usePlaceAutocomplete = (
         });
         if (!isActive) return;
         setSuggestions(results);
-      } catch {
+      } catch (error) {
         if (!isActive) return;
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || isAbortError(error)) return;
         setSuggestions([]);
-        setError("Failed to search places.");
+        setError(toErrorMessage(error, "Failed to search places."));
       } finally {
         if (!isActive) return;
         setIsLoading(false);
