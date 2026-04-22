@@ -2,6 +2,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import MapboxGL from "@rnmapbox/maps";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Linking,
   Pressable,
@@ -17,7 +18,11 @@ import { setDestination, setOrigin } from "@/features/route/routeSlice";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 import { useDirections } from "@/hooks/use-directions";
 import { usePlaces } from "@/hooks/use-places";
-import type { MapboxPlaceSuggestion } from "@/services/mapbox.service";
+import { reverseGeocode, type MapboxPlaceSuggestion } from "@/services/mapbox.service";
+import {
+  getCurrentLocation,
+  requestForegroundLocationPermission,
+} from "@/services/location.service";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 import { styles } from "./map.styles";
@@ -50,6 +55,8 @@ export default function MapTabScreen() {
   const [destinationText, setDestinationText] = React.useState(
     destination?.placeName ?? "",
   );
+  const [isSettingOriginFromLocation, setIsSettingOriginFromLocation] =
+    React.useState(false);
 
   const canSwap = Boolean(
     origin ||
@@ -57,6 +64,47 @@ export default function MapTabScreen() {
     originText.trim().length > 0 ||
     destinationText.trim().length > 0,
   );
+
+  const handleUseCurrentLocationPress = useCallback(() => {
+    if (isSettingOriginFromLocation) return;
+
+    setActiveField(null);
+    setIsSettingOriginFromLocation(true);
+
+    void (async () => {
+      try {
+        const status = await requestForegroundLocationPermission();
+        if (status !== "granted") return;
+
+        const current = await getCurrentLocation();
+
+        let placeName = "Current location";
+        if (accessToken) {
+          try {
+            const resolvedName = await reverseGeocode({
+              latitude: current.latitude,
+              longitude: current.longitude,
+              accessToken,
+            });
+            if (resolvedName) placeName = resolvedName;
+          } catch {
+            placeName = "Current location";
+          }
+        }
+
+        dispatch(
+          setOrigin({
+            latitude: current.latitude,
+            longitude: current.longitude,
+            placeName,
+          }),
+        );
+        setOriginText(placeName);
+      } finally {
+        setIsSettingOriginFromLocation(false);
+      }
+    })();
+  }, [accessToken, dispatch, isSettingOriginFromLocation]);
 
   const handleSwapPress = useCallback(() => {
     if (!canSwap) return;
@@ -412,6 +460,18 @@ export default function MapTabScreen() {
           style={[styles.searchCard, { marginTop: insets.top + 8 }]}
           pointerEvents="auto"
         >
+          <Pressable
+            style={styles.currentLocationButton}
+            onPress={handleUseCurrentLocationPress}
+            hitSlop={8}
+          >
+            {isSettingOriginFromLocation ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <MaterialIcons name="my-location" size={18} color="#fff" />
+            )}
+          </Pressable>
+
           {canSwap ? (
             <Pressable
               style={styles.swapButton}

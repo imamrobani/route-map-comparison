@@ -213,6 +213,17 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  currentLocationButton: {
+    position: "absolute",
+    right: 10,
+    top: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   bannerActions: {
     flexDirection: "row",
     gap: 8,
