@@ -2,7 +2,7 @@ import { env } from "@/config/env";
 import { setDestination, setOrigin } from "@/features/route/routeSlice";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 import { useDirections } from "@/hooks/use-directions";
-import { usePlaces } from "@/hooks/use-places";
+import { usePlaceAutocompleteController } from "@/hooks/use-place-autocomplete-controller";
 import {
   getCurrentLocation,
   requestForegroundLocationPermission,
@@ -18,6 +18,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Linking,
   Pressable,
   Text,
@@ -42,6 +43,9 @@ export default function MapTabScreen() {
   const routeError = useAppSelector((state) => state.route.error);
 
   const cameraRef = useRef<MapboxGL.Camera>(null);
+  const originInputRef = useRef<TextInput>(null);
+  const destinationInputRef = useRef<TextInput>(null);
+  const hasUserEditedRef = useRef({ origin: false, destination: false });
 
   const {
     error: locationError,
@@ -62,6 +66,22 @@ export default function MapTabScreen() {
   const [isSettingOriginFromLocation, setIsSettingOriginFromLocation] =
     React.useState(false);
 
+  const {
+    error: placesError,
+    isLoading: isSearchingPlaces,
+    suggestions,
+    search: searchPlaces,
+    reset: resetPlaces,
+  } = usePlaceAutocompleteController();
+
+  const proximity = useMemo(
+    () =>
+      location
+        ? { latitude: location.latitude, longitude: location.longitude }
+        : undefined,
+    [location],
+  );
+
   const canSwap = Boolean(
     origin ||
     destination ||
@@ -73,6 +93,12 @@ export default function MapTabScreen() {
     if (isSettingOriginFromLocation) return;
 
     setActiveField(null);
+    originInputRef.current?.blur();
+    destinationInputRef.current?.blur();
+    Keyboard.dismiss();
+    resetPlaces();
+    hasUserEditedRef.current.origin = false;
+    hasUserEditedRef.current.destination = false;
     setIsSettingOriginFromLocation(true);
 
     void (async () => {
@@ -104,11 +130,12 @@ export default function MapTabScreen() {
           }),
         );
         setOriginText(placeName);
+        hasUserEditedRef.current.origin = false;
       } finally {
         setIsSettingOriginFromLocation(false);
       }
     })();
-  }, [accessToken, dispatch, isSettingOriginFromLocation]);
+  }, [accessToken, dispatch, isSettingOriginFromLocation, resetPlaces]);
 
   const handleSwapPress = useCallback(() => {
     if (!canSwap) return;
@@ -117,42 +144,25 @@ export default function MapTabScreen() {
     const nextDestination = origin;
 
     setActiveField(null);
+    originInputRef.current?.blur();
+    destinationInputRef.current?.blur();
+    Keyboard.dismiss();
+    resetPlaces();
     dispatch(setOrigin(nextOrigin));
     dispatch(setDestination(nextDestination));
     setOriginText(nextOrigin?.placeName ?? "");
     setDestinationText(nextDestination?.placeName ?? "");
-  }, [canSwap, destination, dispatch, origin]);
 
-  useEffect(() => {
-    if (!activeField || activeField !== "origin") {
-      setOriginText(origin?.placeName ?? "");
-    }
-  }, [activeField, origin?.placeName]);
+    hasUserEditedRef.current.origin = false;
+    hasUserEditedRef.current.destination = false;
+  }, [canSwap, destination, dispatch, origin, resetPlaces]);
 
-  useEffect(() => {
-    if (!activeField || activeField !== "destination") {
-      setDestinationText(destination?.placeName ?? "");
-    }
-  }, [activeField, destination?.placeName]);
-
-  const query =
+  const activeQuery =
     activeField === "origin"
       ? originText
       : activeField === "destination"
         ? destinationText
         : "";
-  const {
-    error: placesError,
-    isLoading: isSearchingPlaces,
-    suggestions,
-  } = usePlaces(query, {
-    enabled: Boolean(activeField),
-    proximity: location
-      ? { latitude: location.latitude, longitude: location.longitude }
-      : undefined,
-    debounceMs: 450,
-    minLength: 3,
-  });
 
   useEffect(() => {
     if (!accessToken) return;
@@ -304,7 +314,11 @@ export default function MapTabScreen() {
 
   const dismissOverlay = useCallback(() => {
     setActiveField(null);
-  }, []);
+    originInputRef.current?.blur();
+    destinationInputRef.current?.blur();
+    Keyboard.dismiss();
+    resetPlaces();
+  }, [resetPlaces]);
 
   const renderSuggestionSeparator = useCallback(
     () => <View style={styles.suggestionSeparator} />,
@@ -322,6 +336,7 @@ export default function MapTabScreen() {
           }),
         );
         setOriginText(item.placeName);
+        hasUserEditedRef.current.origin = false;
       }
 
       if (activeField === "destination") {
@@ -333,12 +348,104 @@ export default function MapTabScreen() {
           }),
         );
         setDestinationText(item.placeName);
+        hasUserEditedRef.current.destination = false;
       }
 
       setActiveField(null);
+      originInputRef.current?.blur();
+      destinationInputRef.current?.blur();
+      Keyboard.dismiss();
+      resetPlaces();
     },
-    [activeField, dispatch],
+    [activeField, dispatch, resetPlaces],
   );
+
+  const handleOriginFocus = useCallback(() => {
+    if (activeField !== "origin") resetPlaces();
+    setActiveField("origin");
+
+    if (hasUserEditedRef.current.origin && originText.trim().length >= 3) {
+      searchPlaces({
+        query: originText,
+        proximity,
+        enabled: true,
+        minLength: 3,
+        debounceMs: 450,
+      });
+    }
+  }, [activeField, originText, proximity, resetPlaces, searchPlaces]);
+
+  const handleDestinationFocus = useCallback(() => {
+    if (activeField !== "destination") resetPlaces();
+    setActiveField("destination");
+
+    if (
+      hasUserEditedRef.current.destination &&
+      destinationText.trim().length >= 3
+    ) {
+      searchPlaces({
+        query: destinationText,
+        proximity,
+        enabled: true,
+        minLength: 3,
+        debounceMs: 450,
+      });
+    }
+  }, [activeField, destinationText, proximity, resetPlaces, searchPlaces]);
+
+  const handleOriginChangeText = useCallback(
+    (text: string) => {
+      setOriginText(text);
+      hasUserEditedRef.current.origin = true;
+
+      if (origin && text.trim() !== origin.placeName) {
+        dispatch(setOrigin(null));
+      }
+
+      searchPlaces({
+        query: text,
+        proximity,
+        enabled: true,
+        minLength: 3,
+        debounceMs: 450,
+      });
+    },
+    [dispatch, origin, proximity, searchPlaces],
+  );
+
+  const handleDestinationChangeText = useCallback(
+    (text: string) => {
+      setDestinationText(text);
+      hasUserEditedRef.current.destination = true;
+
+      if (destination && text.trim() !== destination.placeName) {
+        dispatch(setDestination(null));
+      }
+
+      searchPlaces({
+        query: text,
+        proximity,
+        enabled: true,
+        minLength: 3,
+        debounceMs: 450,
+      });
+    },
+    [destination, dispatch, proximity, searchPlaces],
+  );
+
+  const handleClearOrigin = useCallback(() => {
+    setOriginText("");
+    hasUserEditedRef.current.origin = false;
+    dispatch(setOrigin(null));
+    resetPlaces();
+  }, [dispatch, resetPlaces]);
+
+  const handleClearDestination = useCallback(() => {
+    setDestinationText("");
+    hasUserEditedRef.current.destination = false;
+    dispatch(setDestination(null));
+    resetPlaces();
+  }, [dispatch, resetPlaces]);
 
   const renderSuggestionItem = useCallback(
     ({ item }: { item: MapboxPlaceSuggestion }) => (
@@ -482,12 +589,19 @@ export default function MapTabScreen() {
                   />
                 </View>
                 <TextInput
+                  ref={originInputRef}
                   value={originText}
-                  onChangeText={setOriginText}
+                  onChangeText={handleOriginChangeText}
                   placeholder="Search origin"
                   placeholderTextColor="#9CA3AF"
                   style={styles.searchInput}
-                  onFocus={() => setActiveField("origin")}
+                  onFocus={handleOriginFocus}
+                  onBlur={() => {
+                    if (activeField === "origin") {
+                      setActiveField(null);
+                      resetPlaces();
+                    }
+                  }}
                   autoCorrect={false}
                   autoCapitalize="none"
                   returnKeyType="search"
@@ -495,7 +609,7 @@ export default function MapTabScreen() {
                 {activeField === "origin" && originText.length > 0 ? (
                   <Pressable
                     style={styles.clearButton}
-                    onPress={() => setOriginText("")}
+                    onPress={handleClearOrigin}
                     hitSlop={8}
                   >
                     <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
@@ -528,12 +642,19 @@ export default function MapTabScreen() {
                   <MaterialIcons name="place" size={18} color="#F97316" />
                 </View>
                 <TextInput
+                  ref={destinationInputRef}
                   value={destinationText}
-                  onChangeText={setDestinationText}
+                  onChangeText={handleDestinationChangeText}
                   placeholder="Search destination"
                   placeholderTextColor="#9CA3AF"
                   style={styles.searchInput}
-                  onFocus={() => setActiveField("destination")}
+                  onFocus={handleDestinationFocus}
+                  onBlur={() => {
+                    if (activeField === "destination") {
+                      setActiveField(null);
+                      resetPlaces();
+                    }
+                  }}
                   autoCorrect={false}
                   autoCapitalize="none"
                   returnKeyType="search"
@@ -541,7 +662,7 @@ export default function MapTabScreen() {
                 {activeField === "destination" && destinationText.length > 0 ? (
                   <Pressable
                     style={styles.clearButton}
-                    onPress={() => setDestinationText("")}
+                    onPress={handleClearDestination}
                     hitSlop={8}
                   >
                     <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
@@ -550,9 +671,11 @@ export default function MapTabScreen() {
               </View>
             </View>
 
-            {activeField ? (
+            {activeField &&
+            hasUserEditedRef.current[activeField] &&
+            activeQuery.trim().length > 0 ? (
               <View style={styles.suggestionsContainer}>
-                {query.trim().length > 0 && query.trim().length < 3 ? (
+                {activeQuery.trim().length < 3 ? (
                   <Text style={styles.suggestionsHint}>
                     Type at least 3 characters.
                   </Text>
@@ -564,7 +687,7 @@ export default function MapTabScreen() {
                   <Text style={styles.suggestionsHint}>Searching…</Text>
                 ) : null}
                 {!isSearchingPlaces &&
-                query.trim().length >= 3 &&
+                activeQuery.trim().length >= 3 &&
                 suggestions.length === 0 &&
                 !placesError ? (
                   <Text style={styles.suggestionsHint}>No results.</Text>
