@@ -1,5 +1,5 @@
 import MapboxGL from "@rnmapbox/maps";
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   FlatList,
   Linking,
@@ -16,6 +16,7 @@ import { env } from "@/config/env";
 import { setDestination, setOrigin } from "@/features/route/routeSlice";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 import { usePlaceAutocomplete } from "@/hooks/use-place-autocomplete";
+import type { MapboxPlaceSuggestion } from "@/services/mapbox.service";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 export default function MapTabScreen() {
@@ -24,6 +25,8 @@ export default function MapTabScreen() {
   const dispatch = useAppDispatch();
   const origin = useAppSelector((state) => state.route.origin);
   const destination = useAppSelector((state) => state.route.destination);
+
+  const cameraRef = useRef<MapboxGL.Camera>(null);
 
   const {
     error,
@@ -86,6 +89,115 @@ export default function MapTabScreen() {
         ? [location.longitude, location.latitude]
         : [106.84513, -6.21462];
 
+  const originLongitude = origin?.longitude;
+  const originLatitude = origin?.latitude;
+  const destinationLongitude = destination?.longitude;
+  const destinationLatitude = destination?.latitude;
+
+  const originCoordinate = useMemo<[number, number] | null>(() => {
+    if (
+      typeof originLongitude !== "number" ||
+      typeof originLatitude !== "number"
+    ) {
+      return null;
+    }
+    return [originLongitude, originLatitude];
+  }, [originLatitude, originLongitude]);
+
+  const destinationCoordinate = useMemo<[number, number] | null>(() => {
+    if (
+      typeof destinationLongitude !== "number" ||
+      typeof destinationLatitude !== "number"
+    ) {
+      return null;
+    }
+    return [destinationLongitude, destinationLatitude];
+  }, [destinationLatitude, destinationLongitude]);
+
+  const dismissOverlay = useCallback(() => {
+    setActiveField(null);
+  }, []);
+
+  const renderSuggestionSeparator = useCallback(
+    () => <View style={styles.suggestionSeparator} />,
+    [],
+  );
+
+  const handleSuggestionPress = useCallback(
+    (item: MapboxPlaceSuggestion) => {
+      if (activeField === "origin") {
+        dispatch(
+          setOrigin({
+            latitude: item.center.latitude,
+            longitude: item.center.longitude,
+            placeName: item.placeName,
+          }),
+        );
+        setOriginText(item.placeName);
+      }
+
+      if (activeField === "destination") {
+        dispatch(
+          setDestination({
+            latitude: item.center.latitude,
+            longitude: item.center.longitude,
+            placeName: item.placeName,
+          }),
+        );
+        setDestinationText(item.placeName);
+      }
+
+      setActiveField(null);
+    },
+    [activeField, dispatch],
+  );
+
+  const renderSuggestionItem = useCallback(
+    ({ item }: { item: MapboxPlaceSuggestion }) => (
+      <Pressable
+        style={styles.suggestionItem}
+        onPress={() => handleSuggestionPress(item)}
+      >
+        <Text style={styles.suggestionText} numberOfLines={1}>
+          {item.placeName.split(",")[0]}
+        </Text>
+        <Text style={styles.suggestionSubtext} numberOfLines={1}>
+          {item.placeName}
+        </Text>
+      </Pressable>
+    ),
+    [handleSuggestionPress],
+  );
+
+  useEffect(() => {
+    if (
+      typeof originLatitude !== "number" ||
+      typeof originLongitude !== "number" ||
+      typeof destinationLatitude !== "number" ||
+      typeof destinationLongitude !== "number"
+    ) {
+      return;
+    }
+
+    cameraRef.current?.fitBounds(
+      [
+        Math.max(originLongitude, destinationLongitude),
+        Math.max(originLatitude, destinationLatitude),
+      ],
+      [
+        Math.min(originLongitude, destinationLongitude),
+        Math.min(originLatitude, destinationLatitude),
+      ],
+      80,
+      500,
+    );
+  }, [
+    destinationLatitude,
+    destinationLongitude,
+    originLatitude,
+    originLongitude,
+  ]);
+
   if (!accessToken) {
     return (
       <View style={styles.container}>
@@ -102,6 +214,7 @@ export default function MapTabScreen() {
     <View style={styles.container}>
       <MapboxGL.MapView style={styles.map} styleURL={MapboxGL.StyleURL.Street}>
         <MapboxGL.Camera
+          ref={cameraRef}
           centerCoordinate={centerCoordinate}
           zoomLevel={location || origin || destination ? 14 : 11}
         />
@@ -113,14 +226,35 @@ export default function MapTabScreen() {
             radius: "accuracy",
           }}
         />
+
+        {originCoordinate ? (
+          <MapboxGL.MarkerView
+            coordinate={originCoordinate}
+            anchor={{ x: 0.5, y: 1 }}
+            allowOverlap
+          >
+            <View style={styles.markerDot}>
+              <View style={styles.markerDotInner} />
+            </View>
+          </MapboxGL.MarkerView>
+        ) : null}
+
+        {destinationCoordinate ? (
+          <MapboxGL.MarkerView
+            coordinate={destinationCoordinate}
+            anchor={{ x: 0.5, y: 1 }}
+            allowOverlap
+          >
+            <View style={styles.markerPin}>
+              <View style={styles.markerPinInner} />
+            </View>
+          </MapboxGL.MarkerView>
+        ) : null}
       </MapboxGL.MapView>
 
       <View style={styles.overlayContainer} pointerEvents="box-none">
         {activeField ? (
-          <Pressable
-            style={styles.dismissOverlay}
-            onPress={() => setActiveField(null)}
-          />
+          <Pressable style={styles.dismissOverlay} onPress={dismissOverlay} />
         ) : null}
 
         <View
@@ -229,44 +363,8 @@ export default function MapTabScreen() {
                 keyboardShouldPersistTaps="handled"
                 data={suggestions}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <Pressable
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      if (activeField === "origin") {
-                        dispatch(
-                          setOrigin({
-                            latitude: item.center.latitude,
-                            longitude: item.center.longitude,
-                            placeName: item.placeName,
-                          }),
-                        );
-                        setOriginText(item.placeName);
-                      }
-                      if (activeField === "destination") {
-                        dispatch(
-                          setDestination({
-                            latitude: item.center.latitude,
-                            longitude: item.center.longitude,
-                            placeName: item.placeName,
-                          }),
-                        );
-                        setDestinationText(item.placeName);
-                      }
-                      setActiveField(null);
-                    }}
-                  >
-                    <Text style={styles.suggestionText} numberOfLines={1}>
-                      {item.placeName.split(",")[0]}
-                    </Text>
-                    <Text style={styles.suggestionSubtext} numberOfLines={1}>
-                      {item.placeName}
-                    </Text>
-                  </Pressable>
-                )}
-                ItemSeparatorComponent={() => (
-                  <View style={styles.suggestionSeparator} />
-                )}
+                renderItem={renderSuggestionItem}
+                ItemSeparatorComponent={renderSuggestionSeparator}
               />
             </View>
           ) : null}
@@ -411,6 +509,38 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.08)",
     marginLeft: 12,
     marginRight: 12,
+  },
+  markerDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(37, 99, 235, 0.25)",
+    borderWidth: 2,
+    borderColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  markerDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#2563EB",
+  },
+  markerPin: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(220, 38, 38, 0.25)",
+    borderWidth: 2,
+    borderColor: "#DC2626",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  markerPinInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#DC2626",
   },
   banner: {
     backgroundColor: "rgba(0, 0, 0, 0.72)",

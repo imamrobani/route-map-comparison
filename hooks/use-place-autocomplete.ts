@@ -87,7 +87,7 @@ export const usePlaceAutocomplete = (
         });
         if (!isActive) return;
         setSuggestions(results);
-      } catch (err) {
+      } catch {
         if (!isActive) return;
         if (controller.signal.aborted) return;
         setSuggestions([]);
