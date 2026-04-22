@@ -1,0 +1,187 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  map: {
+    flex: 1,
+  },
+  overlayContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  dismissOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  searchCard: {
+    marginHorizontal: 12,
+    backgroundColor: "rgba(17, 24, 39, 0.88)",
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    elevation: 6,
+  },
+  searchRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  searchLabel: {
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  inputIcon: {
+    width: 18,
+    alignItems: "center",
+  },
+  searchInput: {
+    color: "#fff",
+    fontSize: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 0,
+    flex: 1,
+  },
+  clearButton: {
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+  },
+  suggestionsContainer: {
+    maxHeight: 260,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.12)",
+  },
+  suggestionsHint: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 12,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+  },
+  suggestionItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  suggestionText: {
+    color: "#fff",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  suggestionSubtext: {
+    color: "rgba(255, 255, 255, 0.72)",
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  suggestionSeparator: {
+    height: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    marginLeft: 12,
+    marginRight: 12,
+  },
+  markerDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(37, 99, 235, 0.25)",
+    borderWidth: 2,
+    borderColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  markerDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#2563EB",
+  },
+  markerPin: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(220, 38, 38, 0.25)",
+    borderWidth: 2,
+    borderColor: "#DC2626",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  markerPinInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#DC2626",
+  },
+  banner: {
+    backgroundColor: "rgba(0, 0, 0, 0.72)",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  bannerTitle: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  bannerBody: {
+    color: "#fff",
+    fontSize: 13,
+    marginTop: 4,
+    opacity: 0.9,
+  },
+  bannerActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  button: {
+    backgroundColor: "#2563EB",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  buttonSecondary: {
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  buttonSecondaryText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginTop: 48,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  body: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginHorizontal: 16,
+  },
+});

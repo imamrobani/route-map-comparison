@@ -30,11 +30,46 @@ export type ReverseGeocodeParams = {
   signal?: AbortSignal;
 };
 
+export type DirectionsParams = {
+  origin: {
+    latitude: number;
+    longitude: number;
+  };
+  destination: {
+    latitude: number;
+    longitude: number;
+  };
+  accessToken: string;
+  profile?: "driving" | "walking" | "cycling" | "driving-traffic";
+  language?: string;
+  signal?: AbortSignal;
+};
+
+export type DirectionsRoute = {
+  geometry: {
+    type: "LineString";
+    coordinates: [number, number][];
+  };
+  distanceMeters: number;
+  durationSeconds: number;
+};
+
 type MapboxGeocodingResponse = {
   features?: {
     id: string;
     place_name: string;
     center: [number, number];
+  }[];
+};
+
+type MapboxDirectionsResponse = {
+  routes?: {
+    geometry?: {
+      type?: "LineString";
+      coordinates?: [number, number][];
+    };
+    distance?: number;
+    duration?: number;
   }[];
 };
 
@@ -98,4 +133,44 @@ export const reverseGeocode = async (
   const first = response.data.features?.[0];
   if (!first?.place_name) return null;
   return first.place_name;
+};
+
+export const getDirectionsRoute = async (
+  params: DirectionsParams,
+): Promise<DirectionsRoute | null> => {
+  const profile = params.profile ?? "driving";
+
+  const response = await axios.get<MapboxDirectionsResponse>(
+    `https://api.mapbox.com/directions/v5/mapbox/${profile}/${params.origin.longitude},${params.origin.latitude};${params.destination.longitude},${params.destination.latitude}`,
+    {
+      signal: params.signal,
+      params: {
+        access_token: params.accessToken,
+        geometries: "geojson",
+        overview: "full",
+        alternatives: false,
+        steps: false,
+        language: params.language ?? "en",
+      },
+    },
+  );
+
+  const first = response.data.routes?.[0];
+  const coordinates = first?.geometry?.coordinates;
+  if (
+    !first ||
+    first.geometry?.type !== "LineString" ||
+    !Array.isArray(coordinates)
+  ) {
+    return null;
+  }
+
+  return {
+    geometry: {
+      type: "LineString",
+      coordinates,
+    },
+    distanceMeters: typeof first.distance === "number" ? first.distance : 0,
+    durationSeconds: typeof first.duration === "number" ? first.duration : 0,
+  };
 };
