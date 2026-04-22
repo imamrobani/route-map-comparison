@@ -157,6 +157,78 @@ export default function MapTabScreen() {
     };
   }, [route]);
 
+  const routeBounds = useMemo(() => {
+    const coordinates = route?.geometry?.coordinates;
+    if (!coordinates || coordinates.length === 0) return null;
+
+    let minLongitude = Number.POSITIVE_INFINITY;
+    let minLatitude = Number.POSITIVE_INFINITY;
+    let maxLongitude = Number.NEGATIVE_INFINITY;
+    let maxLatitude = Number.NEGATIVE_INFINITY;
+
+    for (const [longitude, latitude] of coordinates) {
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) continue;
+      minLongitude = Math.min(minLongitude, longitude);
+      minLatitude = Math.min(minLatitude, latitude);
+      maxLongitude = Math.max(maxLongitude, longitude);
+      maxLatitude = Math.max(maxLatitude, latitude);
+    }
+
+    if (
+      !Number.isFinite(minLongitude) ||
+      !Number.isFinite(minLatitude) ||
+      !Number.isFinite(maxLongitude) ||
+      !Number.isFinite(maxLatitude)
+    ) {
+      return null;
+    }
+
+    return {
+      ne: [maxLongitude, maxLatitude] as [number, number],
+      sw: [minLongitude, minLatitude] as [number, number],
+    };
+  }, [route?.geometry?.coordinates]);
+
+  const shouldShowRouteSummary = Boolean(
+    routeSummary && !isLoadingRoute && !routeError,
+  );
+  const recenterBottomOffset =
+    Math.max(12, insets.bottom + 12) + (shouldShowRouteSummary ? 88 : 0);
+
+  const handleRecenterPress = useCallback(() => {
+    if (routeBounds) {
+      cameraRef.current?.fitBounds(routeBounds.ne, routeBounds.sw, 80, 450);
+      return;
+    }
+
+    if (originCoordinate && destinationCoordinate) {
+      cameraRef.current?.fitBounds(
+        [
+          Math.max(originCoordinate[0], destinationCoordinate[0]),
+          Math.max(originCoordinate[1], destinationCoordinate[1]),
+        ],
+        [
+          Math.min(originCoordinate[0], destinationCoordinate[0]),
+          Math.min(originCoordinate[1], destinationCoordinate[1]),
+        ],
+        80,
+        450,
+      );
+      return;
+    }
+
+    const fallbackCenter: [number, number] | null = location
+      ? [location.longitude, location.latitude]
+      : (originCoordinate ?? destinationCoordinate);
+
+    if (!fallbackCenter) return;
+    cameraRef.current?.setCamera({
+      centerCoordinate: fallbackCenter,
+      zoomLevel: 14,
+      animationDuration: 450,
+    });
+  }, [destinationCoordinate, location, originCoordinate, routeBounds]);
+
   const dismissOverlay = useCallback(() => {
     setActiveField(null);
   }, []);
@@ -503,6 +575,17 @@ export default function MapTabScreen() {
             </View>
           </View>
         ) : null}
+
+        <Pressable
+          style={[
+            styles.floatingActionButton,
+            { bottom: recenterBottomOffset },
+          ]}
+          onPress={handleRecenterPress}
+          hitSlop={10}
+        >
+          <IconSymbol size={20} name="location.fill" color="#fff" />
+        </Pressable>
       </View>
     </View>
   );
