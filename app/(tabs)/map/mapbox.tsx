@@ -17,7 +17,6 @@ import MapboxGL from "@rnmapbox/maps";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Keyboard,
   Linking,
   Pressable,
@@ -27,6 +26,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { MapSearchCard } from "@/map/shared/map-search-card";
 import { styles } from "./map.styles";
 
 export default function MapboxMapScreen() {
@@ -317,11 +317,6 @@ export default function MapboxMapScreen() {
     resetPlaces();
   }, [resetPlaces]);
 
-  const renderSuggestionSeparator = useCallback(
-    () => <View style={styles.suggestionSeparator} />,
-    [],
-  );
-
   const handleSuggestionPress = useCallback(
     (item: MapboxPlaceSuggestion) => {
       if (activeField === "origin") {
@@ -444,23 +439,6 @@ export default function MapboxMapScreen() {
     resetPlaces();
   }, [dispatch, resetPlaces]);
 
-  const renderSuggestionItem = useCallback(
-    ({ item }: { item: MapboxPlaceSuggestion }) => (
-      <Pressable
-        style={styles.suggestionItem}
-        onPress={() => handleSuggestionPress(item)}
-      >
-        <Text style={styles.suggestionText} numberOfLines={1}>
-          {item.placeName.split(",")[0]}
-        </Text>
-        <Text style={styles.suggestionSubtext} numberOfLines={1}>
-          {item.placeName}
-        </Text>
-      </Pressable>
-    ),
-    [handleSuggestionPress],
-  );
-
   useEffect(() => {
     if (
       typeof originLatitude !== "number" ||
@@ -565,137 +543,52 @@ export default function MapboxMapScreen() {
         ) : null}
 
         <View style={styles.safeAreaTop} pointerEvents="box-none">
-          <View
-            style={[styles.searchCard, { marginTop: 8 }]}
-            pointerEvents="auto"
-          >
-            <View style={styles.searchRow}>
-              <Text style={[styles.searchLabel, styles.originLabel]}>
-                Point A (Origin)
-              </Text>
-              <View style={styles.inputRow}>
-                <View style={styles.inputIcon}>
-                  <MaterialIcons
-                    name="radio-button-checked"
-                    size={18}
-                    color="#2563EB"
-                  />
-                </View>
-                <TextInput
-                  ref={originInputRef}
-                  value={originText}
-                  onChangeText={handleOriginChangeText}
-                  placeholder="Search origin"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.searchInput}
-                  onFocus={handleOriginFocus}
-                  onBlur={() => {
-                    if (activeField === "origin") {
-                      setActiveField(null);
-                      resetPlaces();
-                    }
-                  }}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                />
-                {activeField === "origin" && originText.length > 0 ? (
-                  <Pressable
-                    style={styles.clearButton}
-                    onPress={handleClearOrigin}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {canSwap ? (
-              <View style={styles.swapBetweenRow} pointerEvents="box-none">
-                <Pressable
-                  style={styles.swapBetweenButton}
-                  onPress={handleSwapPress}
-                  hitSlop={10}
-                  pointerEvents="auto"
-                >
-                  <MaterialIcons name="swap-vert" size={18} color="#2563EB" />
-                </Pressable>
-              </View>
-            ) : null}
-
-            <View style={styles.divider} />
-
-            <View style={styles.searchRow}>
-              <Text style={[styles.searchLabel, styles.destinationLabel]}>
-                Point B (Destination)
-              </Text>
-              <View style={styles.inputRow}>
-                <View style={styles.inputIcon}>
-                  <MaterialIcons name="place" size={18} color="#F97316" />
-                </View>
-                <TextInput
-                  ref={destinationInputRef}
-                  value={destinationText}
-                  onChangeText={handleDestinationChangeText}
-                  placeholder="Search destination"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.searchInput}
-                  onFocus={handleDestinationFocus}
-                  onBlur={() => {
-                    if (activeField === "destination") {
-                      setActiveField(null);
-                      resetPlaces();
-                    }
-                  }}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                />
-                {activeField === "destination" && destinationText.length > 0 ? (
-                  <Pressable
-                    style={styles.clearButton}
-                    onPress={handleClearDestination}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {activeField &&
-            hasUserEditedRef.current[activeField] &&
-            activeQuery.trim().length > 0 ? (
-              <View style={styles.suggestionsContainer}>
-                {activeQuery.trim().length < 3 ? (
-                  <Text style={styles.suggestionsHint}>
-                    Type at least 3 characters.
-                  </Text>
-                ) : null}
-                {placesError ? (
-                  <Text style={styles.suggestionsHint}>{placesError}</Text>
-                ) : null}
-                {isSearchingPlaces ? (
-                  <Text style={styles.suggestionsHint}>Searching…</Text>
-                ) : null}
-                {!isSearchingPlaces &&
-                activeQuery.trim().length >= 3 &&
-                suggestions.length === 0 &&
-                !placesError ? (
-                  <Text style={styles.suggestionsHint}>No results.</Text>
-                ) : null}
-
-                <FlatList
-                  keyboardShouldPersistTaps="handled"
-                  data={suggestions}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderSuggestionItem}
-                  ItemSeparatorComponent={renderSuggestionSeparator}
-                />
-              </View>
-            ) : null}
-          </View>
+          <MapSearchCard
+            containerStyle={{ marginTop: 8, marginHorizontal: 16 }}
+            originInputRef={originInputRef}
+            destinationInputRef={destinationInputRef}
+            activeField={activeField}
+            originText={originText}
+            destinationText={destinationText}
+            onOriginChangeText={handleOriginChangeText}
+            onDestinationChangeText={handleDestinationChangeText}
+            onOriginFocus={handleOriginFocus}
+            onDestinationFocus={handleDestinationFocus}
+            onOriginBlur={() => {
+              if (activeField === "origin") {
+                setActiveField(null);
+                resetPlaces();
+              }
+            }}
+            onDestinationBlur={() => {
+              if (activeField === "destination") {
+                setActiveField(null);
+                resetPlaces();
+              }
+            }}
+            onClearOrigin={handleClearOrigin}
+            onClearDestination={handleClearDestination}
+            canSwap={canSwap}
+            onSwap={handleSwapPress}
+            showSuggestions={Boolean(
+              activeField &&
+              hasUserEditedRef.current[activeField] &&
+              activeQuery.trim().length > 0,
+            )}
+            suggestions={suggestions}
+            suggestionsHint={
+              activeQuery.trim().length < 3
+                ? "Type at least 3 characters."
+                : placesError
+                  ? placesError
+                  : isSearchingPlaces
+                    ? "Searching…"
+                    : suggestions.length === 0
+                      ? "No results."
+                      : null
+            }
+            onSuggestionPress={handleSuggestionPress}
+          />
 
           <View style={styles.belowCardActions} pointerEvents="box-none">
             <Pressable

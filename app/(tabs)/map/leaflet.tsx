@@ -6,7 +6,6 @@ import React, {
   useState,
 } from "react";
 import {
-  FlatList,
   Keyboard,
   Pressable,
   StyleSheet,
@@ -24,6 +23,7 @@ import {
   type NominatimPlaceSuggestion,
 } from "@/map/leaflet/nominatim.service";
 import { getOsrmRoute } from "@/map/leaflet/osrm.service";
+import { MapSearchCard } from "@/map/shared/map-search-card";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function LeafletMapScreen() {
@@ -314,28 +314,6 @@ export default function LeafletMapScreen() {
     [activeField, resetPlaces],
   );
 
-  const renderSuggestionSeparator = useCallback(
-    () => <View style={styles.suggestionSeparator} />,
-    [],
-  );
-
-  const renderSuggestionItem = useCallback(
-    ({ item }: { item: NominatimPlaceSuggestion }) => (
-      <Pressable
-        style={styles.suggestionItem}
-        onPress={() => handleSuggestionPress(item)}
-      >
-        <Text style={styles.suggestionText} numberOfLines={1}>
-          {item.placeName.split(",")[0]}
-        </Text>
-        <Text style={styles.suggestionSubtext} numberOfLines={1}>
-          {item.placeName}
-        </Text>
-      </Pressable>
-    ),
-    [handleSuggestionPress],
-  );
-
   return (
     <View style={styles.container}>
       <LeafletMapView
@@ -363,116 +341,32 @@ export default function LeafletMapScreen() {
         ) : null}
 
         <View style={[styles.safeAreaTop]} pointerEvents="box-none">
-          <View
-            style={[styles.searchCard, { marginTop: 8 }]}
-            pointerEvents="auto"
-          >
-            <View style={styles.searchRow}>
-              <Text style={[styles.searchLabel, styles.originLabel]}>
-                Point A (Origin)
-              </Text>
-              <View style={styles.inputRow}>
-                <View style={styles.inputIcon}>
-                  <MaterialIcons
-                    name="radio-button-checked"
-                    size={18}
-                    color="#2563EB"
-                  />
-                </View>
-                <TextInput
-                  ref={originInputRef}
-                  value={originText}
-                  onChangeText={handleOriginChangeText}
-                  placeholder="Search origin"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.searchInput}
-                  onFocus={handleOriginFocus}
-                  onBlur={() => {
-                    if (activeField === "origin") setActiveField(null);
-                  }}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                />
-                {activeField === "origin" && originText.length > 0 ? (
-                  <Pressable
-                    style={styles.clearButton}
-                    onPress={handleClearOrigin}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {canSwap ? (
-              <View style={styles.swapBetweenRow} pointerEvents="box-none">
-                <Pressable
-                  style={styles.swapBetweenButton}
-                  onPress={handleSwapPress}
-                  hitSlop={10}
-                  pointerEvents="auto"
-                >
-                  <MaterialIcons name="swap-vert" size={18} color="#2563EB" />
-                </Pressable>
-              </View>
-            ) : null}
-
-            <View style={styles.divider} />
-
-            <View style={styles.searchRow}>
-              <Text style={[styles.searchLabel, styles.destinationLabel]}>
-                Point B (Destination)
-              </Text>
-              <View style={styles.inputRow}>
-                <View style={styles.inputIcon}>
-                  <MaterialIcons name="place" size={18} color="#F97316" />
-                </View>
-                <TextInput
-                  ref={destinationInputRef}
-                  value={destinationText}
-                  onChangeText={handleDestinationChangeText}
-                  placeholder="Search destination"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.searchInput}
-                  onFocus={handleDestinationFocus}
-                  onBlur={() => {
-                    if (activeField === "destination") setActiveField(null);
-                  }}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                />
-                {activeField === "destination" && destinationText.length > 0 ? (
-                  <Pressable
-                    style={styles.clearButton}
-                    onPress={handleClearDestination}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {shouldShowSuggestions ? (
-              <View style={styles.suggestionsContainer}>
-                {suggestionsHint ? (
-                  <Text style={styles.suggestionsHint}>{suggestionsHint}</Text>
-                ) : null}
-                {suggestions.length > 0 ? (
-                  <FlatList
-                    keyboardShouldPersistTaps="handled"
-                    data={suggestions}
-                    keyExtractor={(item: NominatimPlaceSuggestion) => item.id}
-                    renderItem={renderSuggestionItem}
-                    ItemSeparatorComponent={renderSuggestionSeparator}
-                  />
-                ) : null}
-              </View>
-            ) : null}
-          </View>
+          <MapSearchCard
+            containerStyle={{ marginTop: 8 }}
+            originInputRef={originInputRef}
+            destinationInputRef={destinationInputRef}
+            activeField={activeField}
+            originText={originText}
+            destinationText={destinationText}
+            onOriginChangeText={handleOriginChangeText}
+            onDestinationChangeText={handleDestinationChangeText}
+            onOriginFocus={handleOriginFocus}
+            onDestinationFocus={handleDestinationFocus}
+            onOriginBlur={() => {
+              if (activeField === "origin") setActiveField(null);
+            }}
+            onDestinationBlur={() => {
+              if (activeField === "destination") setActiveField(null);
+            }}
+            onClearOrigin={handleClearOrigin}
+            onClearDestination={handleClearDestination}
+            canSwap={canSwap}
+            onSwap={handleSwapPress}
+            showSuggestions={shouldShowSuggestions}
+            suggestions={suggestions}
+            suggestionsHint={suggestionsHint}
+            onSuggestionPress={handleSuggestionPress}
+          />
 
           {errorMessage ? (
             <View style={styles.errorCard} pointerEvents="auto">
