@@ -1,5 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
+  FlatList,
   Keyboard,
   Pressable,
   StyleSheet,
@@ -10,7 +17,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCurrentLocation } from "@/hooks/use-current-location";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { LeafletMapView } from "@/map/leaflet/leaflet-map-view";
+import {
+  searchNominatimPlaces,
+  type NominatimPlaceSuggestion,
+} from "@/map/leaflet/nominatim.service";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function LeafletMapScreen() {
@@ -28,6 +40,16 @@ export default function LeafletMapScreen() {
   >(null);
   const [originText, setOriginText] = React.useState("");
   const [destinationText, setDestinationText] = React.useState("");
+  const [originPlace, setOriginPlace] =
+    useState<NominatimPlaceSuggestion | null>(null);
+  const [destinationPlace, setDestinationPlace] =
+    useState<NominatimPlaceSuggestion | null>(null);
+  const [suggestions, setSuggestions] = useState<NominatimPlaceSuggestion[]>(
+    [],
+  );
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [placesError, setPlacesError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const {
     error: locationError,
@@ -64,12 +86,69 @@ export default function LeafletMapScreen() {
         ? destinationText
         : "";
 
+  const resetPlaces = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setSuggestions([]);
+    setIsSearchingPlaces(false);
+    setPlacesError(null);
+  }, []);
+
+  const debouncedQuery = useDebouncedValue(activeQuery.trim(), 450);
+
+  useEffect(() => {
+    if (!activeField) {
+      resetPlaces();
+      return;
+    }
+
+    if (!hasUserEditedRef.current[activeField]) {
+      resetPlaces();
+      return;
+    }
+
+    if (debouncedQuery.length < 3) {
+      setSuggestions([]);
+      setPlacesError(null);
+      return;
+    }
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setIsSearchingPlaces(true);
+    setPlacesError(null);
+
+    void (async () => {
+      try {
+        const results = await searchNominatimPlaces({
+          query: debouncedQuery,
+          limit: 8,
+          signal: controller.signal,
+        });
+        setSuggestions(results);
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return;
+        setPlacesError("Failed to search places.");
+        setSuggestions([]);
+      } finally {
+        setIsSearchingPlaces(false);
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [activeField, debouncedQuery, resetPlaces]);
+
   const dismissOverlay = useCallback(() => {
     setActiveField(null);
     originInputRef.current?.blur();
     destinationInputRef.current?.blur();
     Keyboard.dismiss();
-  }, []);
+    resetPlaces();
+  }, [resetPlaces]);
 
   const handleSwapPress = useCallback(() => {
     if (!canSwap) return;
@@ -85,35 +164,56 @@ export default function LeafletMapScreen() {
     setDestinationText(nextDestination);
     hasUserEditedRef.current.origin = false;
     hasUserEditedRef.current.destination = false;
-  }, [canSwap, destinationText, originText]);
+    resetPlaces();
+  }, [canSwap, destinationText, originText, resetPlaces]);
 
   const handleOriginFocus = useCallback(() => {
+    if (activeField !== "origin") resetPlaces();
     setActiveField("origin");
-  }, []);
+  }, [activeField, resetPlaces]);
 
   const handleDestinationFocus = useCallback(() => {
+    if (activeField !== "destination") resetPlaces();
     setActiveField("destination");
-  }, []);
+  }, [activeField, resetPlaces]);
 
-  const handleOriginChangeText = useCallback((text: string) => {
-    setOriginText(text);
-    hasUserEditedRef.current.origin = true;
-  }, []);
+  const handleOriginChangeText = useCallback(
+    (text: string) => {
+      setOriginText(text);
+      hasUserEditedRef.current.origin = true;
 
-  const handleDestinationChangeText = useCallback((text: string) => {
-    setDestinationText(text);
-    hasUserEditedRef.current.destination = true;
-  }, []);
+      if (originPlace && text.trim() !== originPlace.placeName) {
+        setOriginPlace(null);
+      }
+    },
+    [originPlace],
+  );
+
+  const handleDestinationChangeText = useCallback(
+    (text: string) => {
+      setDestinationText(text);
+      hasUserEditedRef.current.destination = true;
+
+      if (destinationPlace && text.trim() !== destinationPlace.placeName) {
+        setDestinationPlace(null);
+      }
+    },
+    [destinationPlace],
+  );
 
   const handleClearOrigin = useCallback(() => {
     setOriginText("");
     hasUserEditedRef.current.origin = false;
-  }, []);
+    setOriginPlace(null);
+    resetPlaces();
+  }, [resetPlaces]);
 
   const handleClearDestination = useCallback(() => {
     setDestinationText("");
     hasUserEditedRef.current.destination = false;
-  }, []);
+    setDestinationPlace(null);
+    resetPlaces();
+  }, [resetPlaces]);
 
   const shouldShowSuggestions = Boolean(
     activeField &&
@@ -124,8 +224,67 @@ export default function LeafletMapScreen() {
   const suggestionsHint = useMemo(() => {
     if (!shouldShowSuggestions) return null;
     if (activeQuery.trim().length < 3) return "Type at least 3 characters.";
-    return "Autocomplete is not implemented yet.";
-  }, [activeQuery, shouldShowSuggestions]);
+    if (placesError) return placesError;
+    if (isSearchingPlaces) return "Searching…";
+    if (
+      !isSearchingPlaces &&
+      activeQuery.trim().length >= 3 &&
+      suggestions.length === 0
+    )
+      return "No results.";
+    return null;
+  }, [
+    activeQuery,
+    isSearchingPlaces,
+    placesError,
+    shouldShowSuggestions,
+    suggestions.length,
+  ]);
+
+  const handleSuggestionPress = useCallback(
+    (item: NominatimPlaceSuggestion) => {
+      if (activeField === "origin") {
+        setOriginPlace(item);
+        setOriginText(item.placeName);
+        hasUserEditedRef.current.origin = false;
+      }
+
+      if (activeField === "destination") {
+        setDestinationPlace(item);
+        setDestinationText(item.placeName);
+        hasUserEditedRef.current.destination = false;
+      }
+
+      setActiveField(null);
+      originInputRef.current?.blur();
+      destinationInputRef.current?.blur();
+      Keyboard.dismiss();
+      resetPlaces();
+    },
+    [activeField, resetPlaces],
+  );
+
+  const renderSuggestionSeparator = useCallback(
+    () => <View style={styles.suggestionSeparator} />,
+    [],
+  );
+
+  const renderSuggestionItem = useCallback(
+    ({ item }: { item: NominatimPlaceSuggestion }) => (
+      <Pressable
+        style={styles.suggestionItem}
+        onPress={() => handleSuggestionPress(item)}
+      >
+        <Text style={styles.suggestionText} numberOfLines={1}>
+          {item.placeName.split(",")[0]}
+        </Text>
+        <Text style={styles.suggestionSubtext} numberOfLines={1}>
+          {item.placeName}
+        </Text>
+      </Pressable>
+    ),
+    [handleSuggestionPress],
+  );
 
   return (
     <View style={styles.container}>
@@ -240,9 +399,20 @@ export default function LeafletMapScreen() {
               </View>
             </View>
 
-            {shouldShowSuggestions && suggestionsHint ? (
+            {shouldShowSuggestions ? (
               <View style={styles.suggestionsContainer}>
-                <Text style={styles.suggestionsHint}>{suggestionsHint}</Text>
+                {suggestionsHint ? (
+                  <Text style={styles.suggestionsHint}>{suggestionsHint}</Text>
+                ) : null}
+                {suggestions.length > 0 ? (
+                  <FlatList
+                    keyboardShouldPersistTaps="handled"
+                    data={suggestions}
+                    keyExtractor={(item: NominatimPlaceSuggestion) => item.id}
+                    renderItem={renderSuggestionItem}
+                    ItemSeparatorComponent={renderSuggestionSeparator}
+                  />
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -434,6 +604,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 12,
+  },
+  suggestionItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  suggestionText: {
+    color: "#111827",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  suggestionSubtext: {
+    color: "#6B7280",
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  suggestionSeparator: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginLeft: 14,
+    marginRight: 14,
   },
   errorCard: {
     backgroundColor: "rgba(255, 255, 255, 0.92)",
