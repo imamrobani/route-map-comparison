@@ -46,6 +46,25 @@ type LeafletBridgeCommand =
       payload?: {
         delta?: number;
       };
+    }
+  | {
+      type: "setMarkers";
+      payload: {
+        origin?: {
+          latitude: number;
+          longitude: number;
+        };
+        destination?: {
+          latitude: number;
+          longitude: number;
+        };
+      };
+    }
+  | {
+      type: "fitMarkers";
+      payload: {
+        padding?: number;
+      };
     };
 
 function buildLeafletHtml({
@@ -94,6 +113,28 @@ function buildLeafletHtml({
     <script>
       (function () {
         window.__userMarker = null;
+        window.__originMarker = null;
+        window.__destinationMarker = null;
+
+        function createColoredMarkerIcon(kind) {
+          var color = kind === 'destination' ? '#F97316' : '#2563EB';
+          var svg =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">' +
+            '<path d="M16 46C16 46 30 31.5 30 18C30 10.3 23.7 4 16 4C8.3 4 2 10.3 2 18C2 31.5 16 46 16 46Z" fill="' +
+            color +
+            '" stroke="rgba(255,255,255,0.98)" stroke-width="2"/>' +
+            '<circle cx="16" cy="18" r="6" fill="rgba(255,255,255,0.96)"/>' +
+            '</svg>';
+
+          var url = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+          return L.icon({
+            iconUrl: url,
+            iconRetinaUrl: url,
+            iconSize: [26, 40],
+            iconAnchor: [13, 40],
+            popupAnchor: [0, -36],
+          });
+        }
 
         function postMessage(payload) {
           try {
@@ -133,7 +174,14 @@ function buildLeafletHtml({
             if (!Number.isFinite(lat2) || !Number.isFinite(lng2)) return;
 
             if (!window.__userMarker) {
-              window.__userMarker = L.marker([lat2, lng2]).addTo(map);
+              window.__userMarker = L.circleMarker([lat2, lng2], {
+                radius: 8,
+                color: '#2563EB',
+                weight: 3,
+                opacity: 0.9,
+                fillColor: 'rgba(37, 99, 235, 0.35)',
+                fillOpacity: 1,
+              }).addTo(map);
             } else {
               window.__userMarker.setLatLng([lat2, lng2]);
             }
@@ -151,6 +199,52 @@ function buildLeafletHtml({
           if (msg.type === 'zoomOut') {
             var deltaOut = msg.payload && typeof msg.payload.delta === 'number' ? msg.payload.delta : 1;
             map.zoomOut(deltaOut);
+          }
+
+          if (msg.type === 'setMarkers' && msg.payload) {
+            var origin = msg.payload.origin;
+            var destination = msg.payload.destination;
+
+            if (origin && Number.isFinite(Number(origin.latitude)) && Number.isFinite(Number(origin.longitude))) {
+              var oLat = Number(origin.latitude);
+              var oLng = Number(origin.longitude);
+              if (!window.__originMarker) {
+                window.__originMarker = L.marker([oLat, oLng], { icon: createColoredMarkerIcon('origin') }).addTo(map);
+              } else {
+                window.__originMarker.setLatLng([oLat, oLng]);
+              }
+            } else if (window.__originMarker) {
+              map.removeLayer(window.__originMarker);
+              window.__originMarker = null;
+            }
+
+            if (destination && Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude))) {
+              var dLat = Number(destination.latitude);
+              var dLng = Number(destination.longitude);
+              if (!window.__destinationMarker) {
+                window.__destinationMarker = L.marker([dLat, dLng], { icon: createColoredMarkerIcon('destination') }).addTo(map);
+              } else {
+                window.__destinationMarker.setLatLng([dLat, dLng]);
+              }
+            } else if (window.__destinationMarker) {
+              map.removeLayer(window.__destinationMarker);
+              window.__destinationMarker = null;
+            }
+          }
+
+          if (msg.type === 'fitMarkers') {
+            var padding = msg.payload && typeof msg.payload.padding === 'number' ? msg.payload.padding : 48;
+            var points = [];
+            if (window.__originMarker) points.push(window.__originMarker.getLatLng());
+            if (window.__destinationMarker) points.push(window.__destinationMarker.getLatLng());
+            if (points.length === 0) return;
+            if (points.length === 1) {
+              map.setView(points[0], Math.max(map.getZoom(), 14), { animate: true });
+              return;
+            }
+
+            var bounds = L.latLngBounds(points);
+            map.fitBounds(bounds, { padding: [padding, padding], animate: true });
           }
         }
 
@@ -187,6 +281,9 @@ export function LeafletMapView({
   initialZoom = 13,
   userLocation,
   centerOnUserLocation,
+  origin,
+  destination,
+  shouldFitMarkers,
   onReady,
   onError,
 }: {
@@ -194,6 +291,9 @@ export function LeafletMapView({
   initialZoom?: number;
   userLocation?: LatLng | null;
   centerOnUserLocation?: boolean;
+  origin?: LatLng | null;
+  destination?: LatLng | null;
+  shouldFitMarkers?: boolean;
   onReady?: (payload: { version: string }) => void;
   onError?: (payload: { message: string }) => void;
 }) {
@@ -263,6 +363,52 @@ export function LeafletMapView({
       },
     });
   }, [centerOnUserLocation, userLocation]);
+
+  const lastMarkersRef = useRef<{
+    origin: LatLng | null;
+    destination: LatLng | null;
+  }>({ origin: null, destination: null });
+
+  useEffect(() => {
+    const nextOrigin = origin ?? null;
+    const nextDestination = destination ?? null;
+
+    const last = lastMarkersRef.current;
+    if (
+      last.origin?.latitude === nextOrigin?.latitude &&
+      last.origin?.longitude === nextOrigin?.longitude &&
+      last.destination?.latitude === nextDestination?.latitude &&
+      last.destination?.longitude === nextDestination?.longitude
+    ) {
+      return;
+    }
+
+    lastMarkersRef.current = {
+      origin: nextOrigin,
+      destination: nextDestination,
+    };
+    postCommand({
+      type: "setMarkers",
+      payload: {
+        origin: nextOrigin
+          ? { latitude: nextOrigin.latitude, longitude: nextOrigin.longitude }
+          : undefined,
+        destination: nextDestination
+          ? {
+              latitude: nextDestination.latitude,
+              longitude: nextDestination.longitude,
+            }
+          : undefined,
+      },
+    });
+
+    if (shouldFitMarkers) {
+      postCommand({
+        type: "fitMarkers",
+        payload: { padding: 56 },
+      });
+    }
+  }, [destination, origin, shouldFitMarkers]);
 
   return (
     <View style={styles.container}>

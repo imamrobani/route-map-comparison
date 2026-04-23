@@ -292,6 +292,9 @@ export default function LeafletMapScreen() {
         key={reloadNonce}
         userLocation={userLocation}
         centerOnUserLocation={shouldCenterOnUser}
+        origin={originPlace ? originPlace.center : null}
+        destination={destinationPlace ? destinationPlace.center : null}
+        shouldFitMarkers={Boolean(originPlace || destinationPlace)}
         onReady={({ version: nextVersion }) => {
           setErrorMessage(null);
         }}
