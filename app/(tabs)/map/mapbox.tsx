@@ -32,7 +32,7 @@ import {
 
 import { styles } from "./map.styles";
 
-export default function MapTabScreen() {
+export default function MapboxMapScreen() {
   const accessToken = env.mapboxAccessToken;
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
@@ -84,9 +84,9 @@ export default function MapTabScreen() {
 
   const canSwap = Boolean(
     origin ||
-    destination ||
-    originText.trim().length > 0 ||
-    destinationText.trim().length > 0,
+      destination ||
+      originText.trim().length > 0 ||
+      destinationText.trim().length > 0,
   );
 
   const handleUseCurrentLocationPress = useCallback(() => {
@@ -498,8 +498,8 @@ export default function MapTabScreen() {
       <View style={styles.container}>
         <Text style={styles.title}>Map</Text>
         <Text style={styles.body}>
-          Missing Mapbox token. Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN in
-          .env.local, then restart the dev server.
+          Missing Mapbox token. Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN in .env.local,
+          then restart the dev server.
         </Text>
       </View>
     );
@@ -760,9 +760,7 @@ export default function MapTabScreen() {
           </View>
         ) : null}
 
-        {permissionStatus === "granted" &&
-        !isLoadingLocation &&
-        locationError ? (
+        {permissionStatus === "granted" && !isLoadingLocation && locationError ? (
           <View style={styles.banner}>
             <Text style={styles.bannerTitle}>{locationError}</Text>
             <View style={styles.bannerActions}>
@@ -782,9 +780,7 @@ export default function MapTabScreen() {
           >
             <View style={styles.routeSummaryRow}>
               <Text style={styles.routeSummaryLabel}>ETA</Text>
-              <Text style={styles.routeSummaryValue}>
-                {routeSummary.etaText}
-              </Text>
+              <Text style={styles.routeSummaryValue}>{routeSummary.etaText}</Text>
             </View>
             <View style={styles.routeSummaryDivider} />
             <View style={styles.routeSummaryRow}>
@@ -797,10 +793,7 @@ export default function MapTabScreen() {
         ) : null}
 
         <Pressable
-          style={[
-            styles.floatingActionButton,
-            { bottom: recenterBottomOffset },
-          ]}
+          style={[styles.floatingActionButton, { bottom: recenterBottomOffset }]}
           onPress={handleRecenterPress}
           hitSlop={10}
         >
@@ -810,3 +803,4 @@ export default function MapTabScreen() {
     </View>
   );
 }
+
