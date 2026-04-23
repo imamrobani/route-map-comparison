@@ -1,6 +1,6 @@
-import React, { useMemo, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
-import WebView, { type WebViewMessageEvent } from 'react-native-webview';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import WebView, { type WebViewMessageEvent } from "react-native-webview";
 
 type LatLng = {
   latitude: number;
@@ -9,12 +9,31 @@ type LatLng = {
 
 type LeafletBridgeMessage =
   | {
-      type: 'ready';
+      type: "ready";
       version: string;
     }
   | {
-      type: 'error';
+      type: "error";
       message: string;
+    };
+
+type LeafletBridgeCommand =
+  | {
+      type: "setCenter";
+      payload: {
+        latitude: number;
+        longitude: number;
+        zoom?: number;
+      };
+    }
+  | {
+      type: "setUserLocation";
+      payload: {
+        latitude: number;
+        longitude: number;
+        center?: boolean;
+        zoom?: number;
+      };
     };
 
 function buildLeafletHtml({
@@ -62,6 +81,8 @@ function buildLeafletHtml({
     ></script>
     <script>
       (function () {
+        window.__userMarker = null;
+
         function postMessage(payload) {
           try {
             window.ReactNativeWebView.postMessage(JSON.stringify(payload));
@@ -89,6 +110,24 @@ function buildLeafletHtml({
             var zoom = typeof msg.payload.zoom === 'number' ? msg.payload.zoom : undefined;
             if (Number.isFinite(lat) && Number.isFinite(lng)) {
               map.setView([lat, lng], zoom ?? map.getZoom(), { animate: true });
+            }
+          }
+
+          if (msg.type === 'setUserLocation' && msg.payload) {
+            var lat2 = Number(msg.payload.latitude);
+            var lng2 = Number(msg.payload.longitude);
+            var center = Boolean(msg.payload.center);
+            var zoom2 = typeof msg.payload.zoom === 'number' ? msg.payload.zoom : undefined;
+            if (!Number.isFinite(lat2) || !Number.isFinite(lng2)) return;
+
+            if (!window.__userMarker) {
+              window.__userMarker = L.marker([lat2, lng2]).addTo(map);
+            } else {
+              window.__userMarker.setLatLng([lat2, lng2]);
+            }
+
+            if (center) {
+              map.setView([lat2, lng2], zoom2 ?? Math.max(map.getZoom(), 14), { animate: true });
             }
           }
         }
@@ -121,15 +160,22 @@ function buildLeafletHtml({
 export function LeafletMapView({
   initialCenter = { latitude: -6.21462, longitude: 106.84513 },
   initialZoom = 13,
+  userLocation,
+  centerOnUserLocation,
   onReady,
   onError,
 }: {
   initialCenter?: LatLng;
   initialZoom?: number;
+  userLocation?: LatLng | null;
+  centerOnUserLocation?: boolean;
   onReady?: (payload: { version: string }) => void;
   onError?: (payload: { message: string }) => void;
 }) {
   const webViewRef = useRef<WebView>(null);
+  const queuedMessagesRef = useRef<string[]>([]);
+  const [isBridgeReady, setIsBridgeReady] = useState(false);
+
   const html = useMemo(
     () => buildLeafletHtml({ initialCenter, initialZoom }),
     [initialCenter, initialZoom],
@@ -145,16 +191,60 @@ export function LeafletMapView({
     }
 
     if (!message) return;
-    if (message.type === 'ready') onReady?.({ version: message.version });
-    if (message.type === 'error') onError?.({ message: message.message });
+    if (message.type === "ready") {
+      setIsBridgeReady(true);
+      onReady?.({ version: message.version });
+
+      const queued = queuedMessagesRef.current;
+      queuedMessagesRef.current = [];
+      for (const item of queued) {
+        webViewRef.current?.postMessage(item);
+      }
+    }
+    if (message.type === "error") onError?.({ message: message.message });
   };
+
+  const postCommand = (command: LeafletBridgeCommand) => {
+    const payload = JSON.stringify(command);
+    if (!isBridgeReady) {
+      queuedMessagesRef.current.push(payload);
+      return;
+    }
+
+    webViewRef.current?.postMessage(payload);
+  };
+
+  const lastUserLocationRef = useRef<LatLng | null>(null);
+  useEffect(() => {
+    if (!userLocation) return;
+
+    const last = lastUserLocationRef.current;
+    if (
+      last &&
+      last.latitude === userLocation.latitude &&
+      last.longitude === userLocation.longitude &&
+      !centerOnUserLocation
+    ) {
+      return;
+    }
+
+    lastUserLocationRef.current = userLocation;
+    postCommand({
+      type: "setUserLocation",
+      payload: {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        center: Boolean(centerOnUserLocation),
+      },
+    });
+  }, [centerOnUserLocation, userLocation]);
 
   return (
     <View style={styles.container}>
       <WebView
         ref={webViewRef}
         source={{ html }}
-        originWhitelist={['*']}
+        originWhitelist={["*"]}
         onMessage={handleMessage}
         setSupportMultipleWindows={false}
         bounces={false}
@@ -168,6 +258,6 @@ export function LeafletMapView({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0b1220',
+    backgroundColor: "#0b1220",
   },
 });
