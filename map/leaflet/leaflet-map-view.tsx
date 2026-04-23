@@ -34,6 +34,18 @@ type LeafletBridgeCommand =
         center?: boolean;
         zoom?: number;
       };
+    }
+  | {
+      type: "zoomIn";
+      payload?: {
+        delta?: number;
+      };
+    }
+  | {
+      type: "zoomOut";
+      payload?: {
+        delta?: number;
+      };
     };
 
 function buildLeafletHtml({
@@ -130,13 +142,26 @@ function buildLeafletHtml({
               map.setView([lat2, lng2], zoom2 ?? Math.max(map.getZoom(), 14), { animate: true });
             }
           }
+
+          if (msg.type === 'zoomIn') {
+            var deltaIn = msg.payload && typeof msg.payload.delta === 'number' ? msg.payload.delta : 1;
+            map.zoomIn(deltaIn);
+          }
+
+          if (msg.type === 'zoomOut') {
+            var deltaOut = msg.payload && typeof msg.payload.delta === 'number' ? msg.payload.delta : 1;
+            map.zoomOut(deltaOut);
+          }
         }
 
         var map;
         try {
           map = L.map('map', {
-            zoomControl: true,
+            zoomControl: false,
             attributionControl: true,
+            touchZoom: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
           }).setView([${safeLat}, ${safeLng}], ${safeZoom});
 
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

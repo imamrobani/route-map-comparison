@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-  ActivityIndicator,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,13 +16,18 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 export default function LeafletMapScreen() {
   const insets = useSafeAreaInsets();
   const hasCenteredRef = useRef(false);
+  const originInputRef = useRef<TextInput>(null);
+  const destinationInputRef = useRef<TextInput>(null);
+  const hasUserEditedRef = useRef({ origin: false, destination: false });
 
-  const [status, setStatus] = React.useState<"loading" | "ready" | "error">(
-    "loading",
-  );
-  const [version, setVersion] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = React.useState(0);
+
+  const [activeField, setActiveField] = React.useState<
+    "origin" | "destination" | null
+  >(null);
+  const [originText, setOriginText] = React.useState("");
+  const [destinationText, setDestinationText] = React.useState("");
 
   const {
     error: locationError,
@@ -47,6 +53,80 @@ export default function LeafletMapScreen() {
     ? { latitude: location.latitude, longitude: location.longitude }
     : null;
 
+  const canSwap = Boolean(
+    originText.trim().length > 0 || destinationText.trim().length > 0,
+  );
+
+  const activeQuery =
+    activeField === "origin"
+      ? originText
+      : activeField === "destination"
+        ? destinationText
+        : "";
+
+  const dismissOverlay = useCallback(() => {
+    setActiveField(null);
+    originInputRef.current?.blur();
+    destinationInputRef.current?.blur();
+    Keyboard.dismiss();
+  }, []);
+
+  const handleSwapPress = useCallback(() => {
+    if (!canSwap) return;
+
+    const nextOrigin = destinationText;
+    const nextDestination = originText;
+
+    setActiveField(null);
+    originInputRef.current?.blur();
+    destinationInputRef.current?.blur();
+    Keyboard.dismiss();
+    setOriginText(nextOrigin);
+    setDestinationText(nextDestination);
+    hasUserEditedRef.current.origin = false;
+    hasUserEditedRef.current.destination = false;
+  }, [canSwap, destinationText, originText]);
+
+  const handleOriginFocus = useCallback(() => {
+    setActiveField("origin");
+  }, []);
+
+  const handleDestinationFocus = useCallback(() => {
+    setActiveField("destination");
+  }, []);
+
+  const handleOriginChangeText = useCallback((text: string) => {
+    setOriginText(text);
+    hasUserEditedRef.current.origin = true;
+  }, []);
+
+  const handleDestinationChangeText = useCallback((text: string) => {
+    setDestinationText(text);
+    hasUserEditedRef.current.destination = true;
+  }, []);
+
+  const handleClearOrigin = useCallback(() => {
+    setOriginText("");
+    hasUserEditedRef.current.origin = false;
+  }, []);
+
+  const handleClearDestination = useCallback(() => {
+    setDestinationText("");
+    hasUserEditedRef.current.destination = false;
+  }, []);
+
+  const shouldShowSuggestions = Boolean(
+    activeField &&
+    hasUserEditedRef.current[activeField] &&
+    activeQuery.trim().length > 0,
+  );
+
+  const suggestionsHint = useMemo(() => {
+    if (!shouldShowSuggestions) return null;
+    if (activeQuery.trim().length < 3) return "Type at least 3 characters.";
+    return "Autocomplete is not implemented yet.";
+  }, [activeQuery, shouldShowSuggestions]);
+
   return (
     <View style={styles.container}>
       <LeafletMapView
@@ -54,96 +134,163 @@ export default function LeafletMapScreen() {
         userLocation={userLocation}
         centerOnUserLocation={shouldCenterOnUser}
         onReady={({ version: nextVersion }) => {
-          setStatus("ready");
-          setVersion(nextVersion);
           setErrorMessage(null);
         }}
         onError={({ message }) => {
-          setStatus("error");
           setErrorMessage(message);
         }}
       />
 
-      <View
-        style={[
-          styles.topOverlay,
-          { paddingTop: Math.max(12, insets.top + 8) },
-        ]}
-      >
-        <View style={styles.badgeRow}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeTitle}>Leaflet</Text>
-            <Text style={styles.badgeSubtitle}>OpenStreetMap tiles</Text>
+      <View style={styles.overlayContainer} pointerEvents="box-none">
+        {activeField ? (
+          <Pressable style={styles.dismissOverlay} onPress={dismissOverlay} />
+        ) : null}
+
+        <View style={[styles.safeAreaTop]} pointerEvents="box-none">
+          <View
+            style={[styles.searchCard, { marginTop: 8 }]}
+            pointerEvents="auto"
+          >
+            <View style={styles.searchRow}>
+              <Text style={[styles.searchLabel, styles.originLabel]}>
+                Point A (Origin)
+              </Text>
+              <View style={styles.inputRow}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons
+                    name="radio-button-checked"
+                    size={18}
+                    color="#2563EB"
+                  />
+                </View>
+                <TextInput
+                  ref={originInputRef}
+                  value={originText}
+                  onChangeText={handleOriginChangeText}
+                  placeholder="Search origin"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.searchInput}
+                  onFocus={handleOriginFocus}
+                  onBlur={() => {
+                    if (activeField === "origin") setActiveField(null);
+                  }}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                />
+                {activeField === "origin" && originText.length > 0 ? (
+                  <Pressable
+                    style={styles.clearButton}
+                    onPress={handleClearOrigin}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
+            {canSwap ? (
+              <View style={styles.swapBetweenRow} pointerEvents="box-none">
+                <Pressable
+                  style={styles.swapBetweenButton}
+                  onPress={handleSwapPress}
+                  hitSlop={10}
+                  pointerEvents="auto"
+                >
+                  <MaterialIcons name="swap-vert" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
+            ) : null}
+
+            <View style={styles.divider} />
+
+            <View style={styles.searchRow}>
+              <Text style={[styles.searchLabel, styles.destinationLabel]}>
+                Point B (Destination)
+              </Text>
+              <View style={styles.inputRow}>
+                <View style={styles.inputIcon}>
+                  <MaterialIcons name="place" size={18} color="#F97316" />
+                </View>
+                <TextInput
+                  ref={destinationInputRef}
+                  value={destinationText}
+                  onChangeText={handleDestinationChangeText}
+                  placeholder="Search destination"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.searchInput}
+                  onFocus={handleDestinationFocus}
+                  onBlur={() => {
+                    if (activeField === "destination") setActiveField(null);
+                  }}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                />
+                {activeField === "destination" && destinationText.length > 0 ? (
+                  <Pressable
+                    style={styles.clearButton}
+                    onPress={handleClearDestination}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="cancel" size={18} color="#9CA3AF" />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
+            {shouldShowSuggestions && suggestionsHint ? (
+              <View style={styles.suggestionsContainer}>
+                <Text style={styles.suggestionsHint}>{suggestionsHint}</Text>
+              </View>
+            ) : null}
           </View>
 
-          <View style={styles.statusPill}>
-            {status === "loading" ? (
-              <ActivityIndicator size="small" color="#111827" />
-            ) : (
-              <View
-                style={[
-                  styles.statusDot,
-                  status === "ready"
-                    ? styles.statusDotReady
-                    : styles.statusDotError,
-                ]}
-              />
-            )}
-            <Text style={styles.statusText}>
-              {status === "loading"
-                ? "Loading…"
-                : status === "ready"
-                  ? `Ready${version ? ` (v${version})` : ""}`
-                  : "Error"}
-            </Text>
-          </View>
+          {errorMessage ? (
+            <View style={styles.errorCard} pointerEvents="auto">
+              <Text style={styles.errorTitle}>Leaflet failed to load</Text>
+              <Text style={styles.errorBody} numberOfLines={3}>
+                {errorMessage}
+              </Text>
+              <Pressable
+                style={styles.errorButton}
+                onPress={() => {
+                  setErrorMessage(null);
+                  setReloadNonce((value) => value + 1);
+                }}
+              >
+                <Text style={styles.errorButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {permissionStatus === "denied" ? (
+            <View style={styles.errorCard} pointerEvents="auto">
+              <Text style={styles.errorTitle}>
+                Location permission is disabled
+              </Text>
+              <Text style={styles.errorBody}>
+                Enable location to center the map on your current position.
+              </Text>
+              <Pressable style={styles.errorButton} onPress={requestPermission}>
+                <Text style={styles.errorButtonText}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {permissionStatus === "granted" &&
+          !isLoadingLocation &&
+          locationError ? (
+            <View style={styles.errorCard} pointerEvents="auto">
+              <Text style={styles.errorTitle}>Failed to get location</Text>
+              <Text style={styles.errorBody}>{locationError}</Text>
+              <Pressable style={styles.errorButton} onPress={refreshLocation}>
+                <Text style={styles.errorButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
-
-        {errorMessage ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Leaflet failed to load</Text>
-            <Text style={styles.errorBody} numberOfLines={3}>
-              {errorMessage}
-            </Text>
-            <Pressable
-              style={styles.errorButton}
-              onPress={() => {
-                setStatus("loading");
-                setErrorMessage(null);
-                setVersion(null);
-                setReloadNonce((value) => value + 1);
-              }}
-            >
-              <Text style={styles.errorButtonText}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {permissionStatus === "denied" ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>
-              Location permission is disabled
-            </Text>
-            <Text style={styles.errorBody}>
-              Enable location to center the map on your current position.
-            </Text>
-            <Pressable style={styles.errorButton} onPress={requestPermission}>
-              <Text style={styles.errorButtonText}>Try again</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {permissionStatus === "granted" &&
-        !isLoadingLocation &&
-        locationError ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Failed to get location</Text>
-            <Text style={styles.errorBody}>{locationError}</Text>
-            <Pressable style={styles.errorButton} onPress={refreshLocation}>
-              <Text style={styles.errorButtonText}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </View>
 
       <Pressable
@@ -173,7 +320,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0b1220",
   },
-  topOverlay: {
+  overlayContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  safeAreaTop: {
     position: "absolute",
     top: 0,
     left: 0,
@@ -181,54 +335,105 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 10,
   },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+  dismissOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
-  badge: {
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
-    borderRadius: 16,
+  searchCard: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 6,
+  },
+  searchRow: {
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 2,
+    paddingHorizontal: 14,
   },
-  badgeTitle: {
-    color: "#111827",
-    fontSize: 14,
-    fontWeight: "800",
+  searchLabel: {
+    color: "#6B7280",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    textTransform: "uppercase",
   },
-  badgeSubtitle: {
-    color: "#374151",
-    fontSize: 12,
-    fontWeight: "600",
-    opacity: 0.9,
+  originLabel: {
+    color: "#2563EB",
   },
-  statusPill: {
+  destinationLabel: {
+    color: "#F97316",
+  },
+  inputRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
-    borderRadius: 999,
-    paddingVertical: 10,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 16,
     paddingHorizontal: 12,
+    paddingVertical: 9,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  inputIcon: {
+    width: 20,
+    alignItems: "center",
   },
-  statusDotReady: {
-    backgroundColor: "#16A34A",
-  },
-  statusDotError: {
-    backgroundColor: "#DC2626",
-  },
-  statusText: {
+  searchInput: {
     color: "#111827",
+    fontSize: 14,
+    fontWeight: "600",
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    flex: 1,
+  },
+  clearButton: {
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  swapBetweenRow: {
+    alignItems: "flex-end",
+    paddingRight: 14,
+    marginTop: -18,
+    marginBottom: -18,
+    zIndex: 10,
+  },
+  swapBetweenButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    elevation: 3,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+  },
+  suggestionsContainer: {
+    maxHeight: 200,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  suggestionsHint: {
+    color: "#6B7280",
     fontSize: 12,
-    fontWeight: "700",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   errorCard: {
     backgroundColor: "rgba(255, 255, 255, 0.92)",
