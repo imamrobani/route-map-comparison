@@ -25,10 +25,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { styles } from "./map.styles";
 
@@ -84,9 +81,9 @@ export default function MapboxMapScreen() {
 
   const canSwap = Boolean(
     origin ||
-      destination ||
-      originText.trim().length > 0 ||
-      destinationText.trim().length > 0,
+    destination ||
+    originText.trim().length > 0 ||
+    destinationText.trim().length > 0,
   );
 
   const handleUseCurrentLocationPress = useCallback(() => {
@@ -498,8 +495,8 @@ export default function MapboxMapScreen() {
       <View style={styles.container}>
         <Text style={styles.title}>Map</Text>
         <Text style={styles.body}>
-          Missing Mapbox token. Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN in .env.local,
-          then restart the dev server.
+          Missing Mapbox token. Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN in
+          .env.local, then restart the dev server.
         </Text>
       </View>
     );
@@ -567,11 +564,7 @@ export default function MapboxMapScreen() {
           <Pressable style={styles.dismissOverlay} onPress={dismissOverlay} />
         ) : null}
 
-        <SafeAreaView
-          style={styles.safeAreaTop}
-          pointerEvents="box-none"
-          edges={["top"]}
-        >
+        <View style={styles.safeAreaTop} pointerEvents="box-none">
           <View
             style={[styles.searchCard, { marginTop: 8 }]}
             pointerEvents="auto"
@@ -718,7 +711,7 @@ export default function MapboxMapScreen() {
               )}
             </Pressable>
           </View>
-        </SafeAreaView>
+        </View>
 
         {isLoadingRoute ? (
           <View style={styles.banner}>
@@ -760,7 +753,9 @@ export default function MapboxMapScreen() {
           </View>
         ) : null}
 
-        {permissionStatus === "granted" && !isLoadingLocation && locationError ? (
+        {permissionStatus === "granted" &&
+        !isLoadingLocation &&
+        locationError ? (
           <View style={styles.banner}>
             <Text style={styles.bannerTitle}>{locationError}</Text>
             <View style={styles.bannerActions}>
@@ -780,7 +775,9 @@ export default function MapboxMapScreen() {
           >
             <View style={styles.routeSummaryRow}>
               <Text style={styles.routeSummaryLabel}>ETA</Text>
-              <Text style={styles.routeSummaryValue}>{routeSummary.etaText}</Text>
+              <Text style={styles.routeSummaryValue}>
+                {routeSummary.etaText}
+              </Text>
             </View>
             <View style={styles.routeSummaryDivider} />
             <View style={styles.routeSummaryRow}>
@@ -793,7 +790,10 @@ export default function MapboxMapScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.floatingActionButton, { bottom: recenterBottomOffset }]}
+          style={[
+            styles.floatingActionButton,
+            { bottom: recenterBottomOffset },
+          ]}
           onPress={handleRecenterPress}
           hitSlop={10}
         >
@@ -803,4 +803,3 @@ export default function MapboxMapScreen() {
     </View>
   );
 }
-

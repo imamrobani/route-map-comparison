@@ -23,6 +23,7 @@ import {
   searchNominatimPlaces,
   type NominatimPlaceSuggestion,
 } from "@/map/leaflet/nominatim.service";
+import { getOsrmRoute } from "@/map/leaflet/osrm.service";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function LeafletMapScreen() {
@@ -50,6 +51,13 @@ export default function LeafletMapScreen() {
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   const [placesError, setPlacesError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const [routeCoordinates, setRouteCoordinates] = useState<
+    { latitude: number; longitude: number }[] | null
+  >(null);
+  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const routeAbortControllerRef = useRef<AbortController | null>(null);
 
   const {
     error: locationError,
@@ -141,6 +149,48 @@ export default function LeafletMapScreen() {
       controller.abort();
     };
   }, [activeField, debouncedQuery, resetPlaces]);
+
+  useEffect(() => {
+    const origin = originPlace?.center;
+    const destination = destinationPlace?.center;
+
+    if (!origin || !destination) {
+      routeAbortControllerRef.current?.abort();
+      routeAbortControllerRef.current = null;
+      setRouteCoordinates(null);
+      setIsLoadingRoute(false);
+      setRouteError(null);
+      return;
+    }
+
+    routeAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    routeAbortControllerRef.current = controller;
+
+    setIsLoadingRoute(true);
+    setRouteError(null);
+
+    void (async () => {
+      try {
+        const route = await getOsrmRoute({
+          origin,
+          destination,
+          signal: controller.signal,
+        });
+        setRouteCoordinates(route.geometry.coordinates);
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return;
+        setRouteCoordinates(null);
+        setRouteError("Failed to fetch route.");
+      } finally {
+        setIsLoadingRoute(false);
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [destinationPlace, originPlace]);
 
   const dismissOverlay = useCallback(() => {
     setActiveField(null);
@@ -294,7 +344,11 @@ export default function LeafletMapScreen() {
         centerOnUserLocation={shouldCenterOnUser}
         origin={originPlace ? originPlace.center : null}
         destination={destinationPlace ? destinationPlace.center : null}
-        shouldFitMarkers={Boolean(originPlace || destinationPlace)}
+        shouldFitMarkers={
+          Boolean(originPlace || destinationPlace) && !routeCoordinates
+        }
+        route={routeCoordinates}
+        shouldFitRoute={Boolean(routeCoordinates)}
         onReady={({ version: nextVersion }) => {
           setErrorMessage(null);
         }}
@@ -435,6 +489,18 @@ export default function LeafletMapScreen() {
               >
                 <Text style={styles.errorButtonText}>Retry</Text>
               </Pressable>
+            </View>
+          ) : null}
+
+          {isLoadingRoute ? (
+            <View style={styles.errorCard} pointerEvents="none">
+              <Text style={styles.errorTitle}>Fetching route…</Text>
+            </View>
+          ) : null}
+
+          {routeError && !isLoadingRoute ? (
+            <View style={styles.errorCard} pointerEvents="auto">
+              <Text style={styles.errorTitle}>{routeError}</Text>
             </View>
           ) : null}
 

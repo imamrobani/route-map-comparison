@@ -65,6 +65,17 @@ type LeafletBridgeCommand =
       payload: {
         padding?: number;
       };
+    }
+  | {
+      type: "setRoute";
+      payload: {
+        coordinates: { latitude: number; longitude: number }[];
+        fit?: boolean;
+        padding?: number;
+      };
+    }
+  | {
+      type: "clearRoute";
     };
 
 function buildLeafletHtml({
@@ -115,6 +126,7 @@ function buildLeafletHtml({
         window.__userMarker = null;
         window.__originMarker = null;
         window.__destinationMarker = null;
+        window.__routeLine = null;
 
         function createColoredMarkerIcon(kind) {
           var color = kind === 'destination' ? '#F97316' : '#2563EB';
@@ -246,6 +258,42 @@ function buildLeafletHtml({
             var bounds = L.latLngBounds(points);
             map.fitBounds(bounds, { padding: [padding, padding], animate: true });
           }
+
+          if (msg.type === 'setRoute' && msg.payload && Array.isArray(msg.payload.coordinates)) {
+            var coords = msg.payload.coordinates
+              .map(function (c) {
+                return [Number(c.latitude), Number(c.longitude)];
+              })
+              .filter(function (c) {
+                return Number.isFinite(c[0]) && Number.isFinite(c[1]);
+              });
+
+            if (coords.length < 2) return;
+
+            if (!window.__routeLine) {
+              window.__routeLine = L.polyline(coords, {
+                color: '#2563EB',
+                weight: 5,
+                opacity: 0.9,
+                lineJoin: 'round',
+                lineCap: 'round',
+              }).addTo(map);
+            } else {
+              window.__routeLine.setLatLngs(coords);
+            }
+
+            if (msg.payload.fit) {
+              var padding2 = typeof msg.payload.padding === 'number' ? msg.payload.padding : 56;
+              map.fitBounds(window.__routeLine.getBounds(), { padding: [padding2, padding2], animate: true });
+            }
+          }
+
+          if (msg.type === 'clearRoute') {
+            if (window.__routeLine) {
+              map.removeLayer(window.__routeLine);
+              window.__routeLine = null;
+            }
+          }
         }
 
         var map;
@@ -284,6 +332,8 @@ export function LeafletMapView({
   origin,
   destination,
   shouldFitMarkers,
+  route,
+  shouldFitRoute,
   onReady,
   onError,
 }: {
@@ -294,6 +344,8 @@ export function LeafletMapView({
   origin?: LatLng | null;
   destination?: LatLng | null;
   shouldFitMarkers?: boolean;
+  route?: LatLng[] | null;
+  shouldFitRoute?: boolean;
   onReady?: (payload: { version: string }) => void;
   onError?: (payload: { message: string }) => void;
 }) {
@@ -409,6 +461,32 @@ export function LeafletMapView({
       });
     }
   }, [destination, origin, shouldFitMarkers]);
+
+  const lastRouteSignatureRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!route || route.length < 2) {
+      if (lastRouteSignatureRef.current) {
+        lastRouteSignatureRef.current = null;
+        postCommand({ type: "clearRoute" });
+      }
+      return;
+    }
+
+    const first = route[0];
+    const last = route[route.length - 1];
+    const signature = `${route.length}:${first.latitude},${first.longitude}:${last.latitude},${last.longitude}`;
+    if (signature === lastRouteSignatureRef.current && !shouldFitRoute) return;
+    lastRouteSignatureRef.current = signature;
+
+    postCommand({
+      type: "setRoute",
+      payload: {
+        coordinates: route,
+        fit: Boolean(shouldFitRoute),
+        padding: 72,
+      },
+    });
+  }, [route, shouldFitRoute]);
 
   return (
     <View style={styles.container}>
