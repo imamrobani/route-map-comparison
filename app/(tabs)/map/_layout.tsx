@@ -6,8 +6,11 @@ export default function MapLayout() {
     <Stack>
       <Stack.Screen name="index" options={{ title: 'Maps' }} />
       <Stack.Screen name="mapbox" options={{ title: 'Mapbox (Baseline)' }} />
+      <Stack.Screen
+        name="mapbox-nominatim"
+        options={{ title: "Mapbox + Nominatim (Hybrid)" }}
+      />
       <Stack.Screen name="leaflet" options={{ title: 'Leaflet (Comparison)' }} />
     </Stack>
   );
 }
-

@@ -41,6 +41,11 @@ export default function MapMenuScreen() {
           description="Current implementation using @rnmapbox/maps."
         />
         <MenuItem
+          href={"/map/mapbox-nominatim" as Href}
+          title="Mapbox + Nominatim (Hybrid)"
+          description="Mapbox map with free Nominatim autocomplete; routing provider can switch."
+        />
+        <MenuItem
           href="/map/leaflet"
           title="Leaflet (Comparison)"
           description="Separate screen for Leaflet via WebView (work in progress)."
