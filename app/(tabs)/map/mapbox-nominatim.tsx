@@ -1,19 +1,19 @@
 import { env } from "@/config/env";
+import type { Coordinate, Route } from "@/features/route/types";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 import { useNominatimAutocompleteController } from "@/hooks/use-nominatim-autocomplete-controller";
-import type { Coordinate, Route } from "@/features/route/types";
 import {
   reverseNominatim,
   type NominatimPlaceSuggestion,
 } from "@/map/leaflet/nominatim.service";
 import { getOsrmRoute } from "@/map/leaflet/osrm.service";
-import { toErrorMessage, isAbortError } from "@/services/errors";
+import { MapSearchCard } from "@/map/shared/map-search-card";
+import { isAbortError, toErrorMessage } from "@/services/errors";
 import {
   getCurrentLocation,
   requestForegroundLocationPermission,
 } from "@/services/location.service";
 import { getDirectionsRoute } from "@/services/mapbox.service";
-import { MapSearchCard } from "@/map/shared/map-search-card";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import MapboxGL from "@rnmapbox/maps";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
@@ -31,11 +31,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { styles } from "./map.styles";
 
 type RoutingProvider = "mapbox" | "osrm";
+type PickMode = "origin" | "destination";
 
 export default function MapboxNominatimMapScreen() {
   const accessToken = env.mapboxAccessToken;
   const insets = useSafeAreaInsets();
 
+  const mapRef = useRef<MapboxGL.MapView>(null);
   const cameraRef = useRef<MapboxGL.Camera>(null);
   const originInputRef = useRef<TextInput>(null);
   const destinationInputRef = useRef<TextInput>(null);
@@ -65,6 +67,10 @@ export default function MapboxNominatimMapScreen() {
   const routeAbortControllerRef = useRef<AbortController | null>(null);
   const routeRequestIdRef = useRef(0);
 
+  const [pickMode, setPickMode] = React.useState<PickMode | null>(null);
+  const [isConfirmingPick, setIsConfirmingPick] = React.useState(false);
+  const [pickError, setPickError] = React.useState<string | null>(null);
+
   const [isSettingOriginFromLocation, setIsSettingOriginFromLocation] =
     React.useState(false);
 
@@ -78,9 +84,9 @@ export default function MapboxNominatimMapScreen() {
 
   const canSwap = Boolean(
     origin ||
-      destination ||
-      originText.trim().length > 0 ||
-      destinationText.trim().length > 0,
+    destination ||
+    originText.trim().length > 0 ||
+    destinationText.trim().length > 0,
   );
 
   useEffect(() => {
@@ -96,7 +102,9 @@ export default function MapboxNominatimMapScreen() {
         : "";
 
   const shouldShowSuggestions = Boolean(
-    activeField && hasUserEditedRef.current[activeField] && activeQuery.length > 0,
+    activeField &&
+    hasUserEditedRef.current[activeField] &&
+    activeQuery.length > 0,
   );
 
   const suggestionsHint = useMemo(() => {
@@ -107,7 +115,13 @@ export default function MapboxNominatimMapScreen() {
     if (activeQuery.trim().length >= 3 && suggestions.length === 0)
       return "No results.";
     return null;
-  }, [activeQuery, isSearchingPlaces, placesError, shouldShowSuggestions, suggestions.length]);
+  }, [
+    activeQuery,
+    isSearchingPlaces,
+    placesError,
+    shouldShowSuggestions,
+    suggestions.length,
+  ]);
 
   const centerCoordinate: [number, number] = destination
     ? [destination.longitude, destination.latitude]
@@ -119,13 +133,17 @@ export default function MapboxNominatimMapScreen() {
 
   const originCoordinate = useMemo<[number, number] | null>(() => {
     if (!origin) return null;
-    if (!Number.isFinite(origin.longitude) || !Number.isFinite(origin.latitude)) return null;
+    if (!Number.isFinite(origin.longitude) || !Number.isFinite(origin.latitude))
+      return null;
     return [origin.longitude, origin.latitude];
   }, [origin]);
 
   const destinationCoordinate = useMemo<[number, number] | null>(() => {
     if (!destination) return null;
-    if (!Number.isFinite(destination.longitude) || !Number.isFinite(destination.latitude))
+    if (
+      !Number.isFinite(destination.longitude) ||
+      !Number.isFinite(destination.latitude)
+    )
       return null;
     return [destination.longitude, destination.latitude];
   }, [destination]);
@@ -176,17 +194,23 @@ export default function MapboxNominatimMapScreen() {
 
     const durationSeconds = route.durationSeconds;
     const distanceMeters = route.distanceMeters;
-    if (!Number.isFinite(durationSeconds) || !Number.isFinite(distanceMeters)) return null;
+    if (!Number.isFinite(durationSeconds) || !Number.isFinite(distanceMeters))
+      return null;
 
     const minutes = Math.max(1, Math.round(durationSeconds / 60));
     const distanceKm = distanceMeters / 1000;
     return {
       etaText: `${minutes} min`,
-      distanceText: distanceKm >= 10 ? `${distanceKm.toFixed(0)} km` : `${distanceKm.toFixed(1)} km`,
+      distanceText:
+        distanceKm >= 10
+          ? `${distanceKm.toFixed(0)} km`
+          : `${distanceKm.toFixed(1)} km`,
     };
   }, [route]);
 
-  const shouldShowRouteSummary = Boolean(routeSummary && !isLoadingRoute && !routeError);
+  const shouldShowRouteSummary = Boolean(
+    routeSummary && !isLoadingRoute && !routeError,
+  );
   const recenterBottomOffset =
     Math.max(12, insets.bottom + 12) + (shouldShowRouteSummary ? 100 : 0);
 
@@ -197,6 +221,66 @@ export default function MapboxNominatimMapScreen() {
     Keyboard.dismiss();
     resetPlaces();
   }, [resetPlaces]);
+
+  const startPickMode = useCallback(
+    (mode: PickMode) => {
+      dismissOverlay();
+      setPickMode(mode);
+      setPickError(null);
+    },
+    [dismissOverlay],
+  );
+
+  const cancelPickMode = useCallback(() => {
+    setPickMode(null);
+    setPickError(null);
+    setIsConfirmingPick(false);
+  }, []);
+
+  const confirmPickMode = useCallback(async () => {
+    if (!pickMode) return;
+    if (isConfirmingPick) return;
+
+    setIsConfirmingPick(true);
+    setPickError(null);
+
+    try {
+      const center = await mapRef.current?.getCenter();
+      if (!center || !Array.isArray(center) || center.length < 2) {
+        setPickError("Failed to read map center.");
+        return;
+      }
+
+      const longitude = Number(center[0]);
+      const latitude = Number(center[1]);
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+        setPickError("Failed to read map center.");
+        return;
+      }
+
+      let placeName = "Dropped pin";
+      try {
+        const resolvedName = await reverseNominatim({ latitude, longitude });
+        if (resolvedName) placeName = resolvedName;
+      } catch {
+        placeName = "Dropped pin";
+      }
+
+      if (pickMode === "origin") {
+        setOrigin({ latitude, longitude, placeName });
+        setOriginText(placeName);
+        hasUserEditedRef.current.origin = false;
+      } else {
+        setDestination({ latitude, longitude, placeName });
+        setDestinationText(placeName);
+        hasUserEditedRef.current.destination = false;
+      }
+
+      setPickMode(null);
+    } finally {
+      setIsConfirmingPick(false);
+    }
+  }, [isConfirmingPick, pickMode]);
 
   const handleSuggestionPress = useCallback(
     (item: NominatimPlaceSuggestion) => {
@@ -234,7 +318,12 @@ export default function MapboxNominatimMapScreen() {
     setActiveField("origin");
 
     if (hasUserEditedRef.current.origin && originText.trim().length >= 3) {
-      searchPlaces({ query: originText, enabled: true, minLength: 3, debounceMs: 450 });
+      searchPlaces({
+        query: originText,
+        enabled: true,
+        minLength: 3,
+        debounceMs: 450,
+      });
     }
   }, [activeField, originText, resetPlaces, searchPlaces]);
 
@@ -242,7 +331,10 @@ export default function MapboxNominatimMapScreen() {
     if (activeField !== "destination") resetPlaces();
     setActiveField("destination");
 
-    if (hasUserEditedRef.current.destination && destinationText.trim().length >= 3) {
+    if (
+      hasUserEditedRef.current.destination &&
+      destinationText.trim().length >= 3
+    ) {
       searchPlaces({
         query: destinationText,
         enabled: true,
@@ -261,7 +353,12 @@ export default function MapboxNominatimMapScreen() {
         setOrigin(null);
       }
 
-      searchPlaces({ query: text, enabled: true, minLength: 3, debounceMs: 450 });
+      searchPlaces({
+        query: text,
+        enabled: true,
+        minLength: 3,
+        debounceMs: 450,
+      });
     },
     [origin, searchPlaces],
   );
@@ -275,7 +372,12 @@ export default function MapboxNominatimMapScreen() {
         setDestination(null);
       }
 
-      searchPlaces({ query: text, enabled: true, minLength: 3, debounceMs: 450 });
+      searchPlaces({
+        query: text,
+        enabled: true,
+        minLength: 3,
+        debounceMs: 450,
+      });
     },
     [destination, searchPlaces],
   );
@@ -500,7 +602,14 @@ export default function MapboxNominatimMapScreen() {
     return () => {
       controller.abort();
     };
-  }, [accessToken, destination?.latitude, destination?.longitude, origin?.latitude, origin?.longitude, provider]);
+  }, [
+    accessToken,
+    destination?.latitude,
+    destination?.longitude,
+    origin?.latitude,
+    origin?.longitude,
+    provider,
+  ]);
 
   useEffect(() => {
     if (!originCoordinate || !destinationCoordinate) return;
@@ -532,7 +641,11 @@ export default function MapboxNominatimMapScreen() {
 
   return (
     <View style={styles.container}>
-      <MapboxGL.MapView style={styles.map} styleURL={MapboxGL.StyleURL.Street}>
+      <MapboxGL.MapView
+        ref={mapRef}
+        style={styles.map}
+        styleURL={MapboxGL.StyleURL.Street}
+      >
         <MapboxGL.Camera
           ref={cameraRef}
           centerCoordinate={centerCoordinate}
@@ -585,133 +698,255 @@ export default function MapboxNominatimMapScreen() {
       </MapboxGL.MapView>
 
       <View style={styles.overlayContainer} pointerEvents="box-none">
+        {pickMode ? (
+          <View style={pickStyles.crosshair} pointerEvents="none">
+            <View style={pickStyles.crosshairOuter}>
+              <View style={pickStyles.crosshairInner} />
+            </View>
+          </View>
+        ) : null}
+
         {activeField ? (
           <Pressable style={styles.dismissOverlay} onPress={dismissOverlay} />
         ) : null}
 
         <View style={styles.safeAreaTop} pointerEvents="box-none">
-          <MapSearchCard
-            containerStyle={{ marginTop: 8, marginHorizontal: 16 }}
-            originInputRef={originInputRef}
-            destinationInputRef={destinationInputRef}
-            activeField={activeField}
-            originText={originText}
-            destinationText={destinationText}
-            onOriginChangeText={handleOriginChangeText}
-            onDestinationChangeText={handleDestinationChangeText}
-            onOriginFocus={handleOriginFocus}
-            onDestinationFocus={handleDestinationFocus}
-            onOriginBlur={() => {
-              if (activeField === "origin") setActiveField(null);
-            }}
-            onDestinationBlur={() => {
-              if (activeField === "destination") setActiveField(null);
-            }}
-            onClearOrigin={handleClearOrigin}
-            onClearDestination={handleClearDestination}
-            canSwap={canSwap}
-            onSwap={handleSwapPress}
-            showSuggestions={shouldShowSuggestions}
-            suggestions={suggestions}
-            suggestionsHint={suggestionsHint}
-            onSuggestionPress={handleSuggestionPress}
-          />
+          {pickMode ? (
+            <View
+              style={[styles.banner, { marginTop: 8, marginHorizontal: 16 }]}
+            >
+              <Text style={styles.bannerTitle}>
+                Picking {pickMode === "origin" ? "Origin" : "Destination"}
+              </Text>
+              <Text style={styles.bannerBody}>
+                Move the map to place the crosshair on the correct location.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <MapSearchCard
+                containerStyle={{ marginTop: 8, marginHorizontal: 16 }}
+                originInputRef={originInputRef}
+                destinationInputRef={destinationInputRef}
+                activeField={activeField}
+                originText={originText}
+                destinationText={destinationText}
+                onOriginChangeText={handleOriginChangeText}
+                onDestinationChangeText={handleDestinationChangeText}
+                onOriginFocus={handleOriginFocus}
+                onDestinationFocus={handleDestinationFocus}
+                onOriginBlur={() => {
+                  if (activeField === "origin") setActiveField(null);
+                }}
+                onDestinationBlur={() => {
+                  if (activeField === "destination") setActiveField(null);
+                }}
+                onClearOrigin={handleClearOrigin}
+                onClearDestination={handleClearDestination}
+                canSwap={canSwap}
+                onSwap={handleSwapPress}
+                showSuggestions={shouldShowSuggestions}
+                suggestions={suggestions}
+                suggestionsHint={suggestionsHint}
+                onSuggestionPress={handleSuggestionPress}
+              />
 
-          <View style={[styles.banner, { marginHorizontal: 16 }]} pointerEvents="auto">
-            <View style={providerStyles.row}>
-              <View style={providerStyles.titleRow}>
-                <Text style={styles.bannerTitle}>Routing Provider</Text>
-                {isLoadingRoute ? (
-                  <ActivityIndicator size="small" color="#2563EB" />
+              <View
+                style={[styles.banner, { marginHorizontal: 16 }]}
+                pointerEvents="auto"
+              >
+                <Text style={styles.bannerTitle}>Pick on map</Text>
+                <Text style={styles.bannerBody}>
+                  If you can’t find a place, pick it by moving the map under the
+                  crosshair.
+                </Text>
+                <View style={styles.bannerActions}>
+                  <Pressable
+                    style={styles.buttonSecondary}
+                    onPress={() => startPickMode("origin")}
+                  >
+                    <Text style={styles.buttonSecondaryText}>Pick Origin</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.button}
+                    onPress={() => startPickMode("destination")}
+                  >
+                    <Text style={styles.buttonText}>Pick Destination</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View
+                style={[styles.banner, { marginHorizontal: 16 }]}
+                pointerEvents="auto"
+              >
+                <View style={providerStyles.row}>
+                  <View style={providerStyles.titleRow}>
+                    <Text style={styles.bannerTitle}>Routing Provider</Text>
+                    {isLoadingRoute ? (
+                      <ActivityIndicator size="small" color="#2563EB" />
+                    ) : null}
+                  </View>
+                  <View style={providerStyles.segmented}>
+                    <Pressable
+                      style={[
+                        providerStyles.segment,
+                        provider === "mapbox"
+                          ? providerStyles.segmentActive
+                          : null,
+                      ]}
+                      onPress={() => {
+                        setProvider("mapbox");
+                        setRoute(null);
+                        setRouteError(null);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          providerStyles.segmentText,
+                          provider === "mapbox"
+                            ? providerStyles.segmentTextActive
+                            : null,
+                        ]}
+                      >
+                        Mapbox
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        providerStyles.segment,
+                        provider === "osrm"
+                          ? providerStyles.segmentActive
+                          : null,
+                      ]}
+                      onPress={() => {
+                        setProvider("osrm");
+                        setRoute(null);
+                        setRouteError(null);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          providerStyles.segmentText,
+                          provider === "osrm"
+                            ? providerStyles.segmentTextActive
+                            : null,
+                        ]}
+                      >
+                        OSRM
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+                {routeError && !isLoadingRoute ? (
+                  <Text style={[styles.bannerBody, { color: "#B91C1C" }]}>
+                    {routeError}
+                  </Text>
+                ) : null}
+                {!routeError && routeSummary ? (
+                  <Text style={styles.bannerBody}>
+                    {routeSummary.distanceText} · {routeSummary.etaText}
+                  </Text>
                 ) : null}
               </View>
-              <View style={providerStyles.segmented}>
-                <Pressable
-                  style={[
-                    providerStyles.segment,
-                    provider === "mapbox" ? providerStyles.segmentActive : null,
-                  ]}
-                  onPress={() => {
-                    setProvider("mapbox");
-                    setRoute(null);
-                    setRouteError(null);
-                  }}
-                >
-                  <Text
-                    style={[
-                      providerStyles.segmentText,
-                      provider === "mapbox" ? providerStyles.segmentTextActive : null,
-                    ]}
-                  >
-                    Mapbox
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    providerStyles.segment,
-                    provider === "osrm" ? providerStyles.segmentActive : null,
-                  ]}
-                  onPress={() => {
-                    setProvider("osrm");
-                    setRoute(null);
-                    setRouteError(null);
-                  }}
-                >
-                  <Text
-                    style={[
-                      providerStyles.segmentText,
-                      provider === "osrm" ? providerStyles.segmentTextActive : null,
-                    ]}
-                  >
-                    OSRM
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-            {routeError && !isLoadingRoute ? (
-              <Text style={[styles.bannerBody, { color: "#B91C1C" }]}>
-                {routeError}
-              </Text>
-            ) : null}
-            {!routeError && routeSummary ? (
-              <Text style={styles.bannerBody}>
-                {routeSummary.distanceText} · {routeSummary.etaText}
-              </Text>
-            ) : null}
-          </View>
 
-          {permissionStatus === "denied" ? (
-            <View style={[styles.banner, { marginHorizontal: 16 }]} pointerEvents="auto">
-              <Text style={styles.bannerTitle}>Location permission is disabled</Text>
-              <Text style={styles.bannerBody}>
-                Enable location to center the map on your current position.
-              </Text>
-              <Pressable style={providerStyles.inlineButton} onPress={requestPermission}>
-                <Text style={providerStyles.inlineButtonText}>Try again</Text>
-              </Pressable>
-            </View>
-          ) : null}
+              {permissionStatus === "denied" ? (
+                <View
+                  style={[styles.banner, { marginHorizontal: 16 }]}
+                  pointerEvents="auto"
+                >
+                  <Text style={styles.bannerTitle}>
+                    Location permission is disabled
+                  </Text>
+                  <Text style={styles.bannerBody}>
+                    Enable location to center the map on your current position.
+                  </Text>
+                  <Pressable
+                    style={providerStyles.inlineButton}
+                    onPress={requestPermission}
+                  >
+                    <Text style={providerStyles.inlineButtonText}>
+                      Try again
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
 
-          {permissionStatus === "granted" && !isLoadingLocation && locationError ? (
-            <View style={[styles.banner, { marginHorizontal: 16 }]} pointerEvents="auto">
-              <Text style={styles.bannerTitle}>Failed to get location</Text>
-              <Text style={styles.bannerBody}>{locationError}</Text>
-              <Pressable style={providerStyles.inlineButton} onPress={refreshLocation}>
-                <Text style={providerStyles.inlineButtonText}>Retry</Text>
-              </Pressable>
-            </View>
-          ) : null}
+              {permissionStatus === "granted" &&
+              !isLoadingLocation &&
+              locationError ? (
+                <View
+                  style={[styles.banner, { marginHorizontal: 16 }]}
+                  pointerEvents="auto"
+                >
+                  <Text style={styles.bannerTitle}>Failed to get location</Text>
+                  <Text style={styles.bannerBody}>{locationError}</Text>
+                  <Pressable
+                    style={providerStyles.inlineButton}
+                    onPress={refreshLocation}
+                  >
+                    <Text style={providerStyles.inlineButtonText}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
       </View>
 
+      {pickMode ? (
+        <View
+          style={[
+            pickStyles.pickerSheet,
+            {
+              paddingBottom: Math.max(12, insets.bottom + 12),
+            },
+          ]}
+          pointerEvents="auto"
+        >
+          {pickError ? (
+            <Text style={[styles.bannerBody, { color: "#B91C1C" }]}>
+              {pickError}
+            </Text>
+          ) : null}
+          <View style={pickStyles.pickerActions}>
+            <Pressable
+              style={[styles.buttonSecondary, pickStyles.pickerButton]}
+              onPress={cancelPickMode}
+              disabled={isConfirmingPick}
+            >
+              <Text style={styles.buttonSecondaryText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.button, pickStyles.pickerButton]}
+              onPress={confirmPickMode}
+              disabled={isConfirmingPick}
+            >
+              {isConfirmingPick ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  Set {pickMode === "origin" ? "Origin" : "Destination"}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       {shouldShowRouteSummary && routeSummary ? (
         <View
-          style={[styles.routeSummaryCard, { bottom: Math.max(12, insets.bottom + 12) }]}
+          style={[
+            styles.routeSummaryCard,
+            { bottom: Math.max(12, insets.bottom + 12) },
+          ]}
           pointerEvents="none"
         >
           <View style={styles.routeSummaryRow}>
             <Text style={styles.routeSummaryLabel}>Distance</Text>
-            <Text style={styles.routeSummaryValue}>{routeSummary.distanceText}</Text>
+            <Text style={styles.routeSummaryValue}>
+              {routeSummary.distanceText}
+            </Text>
           </View>
           <View style={styles.routeSummaryDivider} />
           <View style={styles.routeSummaryRow}>
@@ -732,7 +967,10 @@ export default function MapboxNominatimMapScreen() {
       <Pressable
         style={[
           styles.floatingActionButton,
-          { bottom: recenterBottomOffset + 56, backgroundColor: "rgba(255, 255, 255, 0.92)" },
+          {
+            bottom: recenterBottomOffset + 56,
+            backgroundColor: "rgba(255, 255, 255, 0.92)",
+          },
         ]}
         onPress={handleUseCurrentLocationPress}
         hitSlop={10}
@@ -792,5 +1030,59 @@ const providerStyles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "700",
+  },
+});
+
+const pickStyles = StyleSheet.create({
+  crosshair: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  crosshairOuter: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: "rgba(17, 24, 39, 0.75)",
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  crosshairInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#111827",
+  },
+  pickerSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 6,
+  },
+  pickerActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  pickerButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
