@@ -71,6 +71,9 @@ export default function MapboxNominatimMapScreen() {
   const [isConfirmingPick, setIsConfirmingPick] = React.useState(false);
   const [pickError, setPickError] = React.useState<string | null>(null);
 
+  const [isPickCardVisible, setIsPickCardVisible] = React.useState(true);
+  const [isRoutingCardVisible, setIsRoutingCardVisible] = React.useState(true);
+
   const [isSettingOriginFromLocation, setIsSettingOriginFromLocation] =
     React.useState(false);
 
@@ -751,104 +754,169 @@ export default function MapboxNominatimMapScreen() {
                 onSuggestionPress={handleSuggestionPress}
               />
 
-              <View
-                style={[styles.banner, { marginHorizontal: 16 }]}
-                pointerEvents="auto"
-              >
-                <Text style={styles.bannerTitle}>Pick on map</Text>
-                <Text style={styles.bannerBody}>
-                  If you can’t find a place, pick it by moving the map under the
-                  crosshair.
-                </Text>
-                <View style={styles.bannerActions}>
-                  <Pressable
-                    style={styles.buttonSecondary}
-                    onPress={() => startPickMode("origin")}
-                  >
-                    <Text style={styles.buttonSecondaryText}>Pick Origin</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.button}
-                    onPress={() => startPickMode("destination")}
-                  >
-                    <Text style={styles.buttonText}>Pick Destination</Text>
-                  </Pressable>
+              {!isPickCardVisible || !isRoutingCardVisible ? (
+                <View style={styles.belowCardActions} pointerEvents="auto">
+                  {!isPickCardVisible ? (
+                    <Pressable
+                      style={styles.belowCardIconButton}
+                      onPress={() => setIsPickCardVisible(true)}
+                      hitSlop={10}
+                    >
+                      <MaterialIcons
+                        name="add-location-alt"
+                        size={18}
+                        color="#111827"
+                      />
+                    </Pressable>
+                  ) : null}
+                  {!isRoutingCardVisible ? (
+                    <Pressable
+                      style={styles.belowCardIconButton}
+                      onPress={() => setIsRoutingCardVisible(true)}
+                      hitSlop={10}
+                    >
+                      <MaterialIcons
+                        name="alt-route"
+                        size={18}
+                        color="#111827"
+                      />
+                    </Pressable>
+                  ) : null}
                 </View>
-              </View>
+              ) : null}
 
-              <View
-                style={[styles.banner, { marginHorizontal: 16 }]}
-                pointerEvents="auto"
-              >
-                <View style={providerStyles.row}>
-                  <View style={providerStyles.titleRow}>
-                    <Text style={styles.bannerTitle}>Routing Provider</Text>
-                    {isLoadingRoute ? (
-                      <ActivityIndicator size="small" color="#2563EB" />
-                    ) : null}
-                  </View>
-                  <View style={providerStyles.segmented}>
+              {isPickCardVisible ? (
+                <View
+                  style={[styles.banner, { marginHorizontal: 16 }]}
+                  pointerEvents="auto"
+                >
+                  <View style={panelStyles.bannerHeader}>
+                    <Text style={styles.bannerTitle}>Pick on map</Text>
                     <Pressable
-                      style={[
-                        providerStyles.segment,
-                        provider === "mapbox"
-                          ? providerStyles.segmentActive
-                          : null,
-                      ]}
-                      onPress={() => {
-                        setProvider("mapbox");
-                        setRoute(null);
-                        setRouteError(null);
-                      }}
+                      style={styles.quickActionButton}
+                      onPress={() => setIsPickCardVisible(false)}
+                      hitSlop={10}
                     >
-                      <Text
-                        style={[
-                          providerStyles.segmentText,
-                          provider === "mapbox"
-                            ? providerStyles.segmentTextActive
-                            : null,
-                        ]}
-                      >
-                        Mapbox
+                      <MaterialIcons
+                        name="expand-less"
+                        size={18}
+                        color="#111827"
+                      />
+                    </Pressable>
+                  </View>
+                  <Text style={styles.bannerBody}>
+                    If you can’t find a place, pick it by moving the map under
+                    the crosshair.
+                  </Text>
+                  <View style={styles.bannerActions}>
+                    <Pressable
+                      style={styles.buttonSecondary}
+                      onPress={() => startPickMode("origin")}
+                    >
+                      <Text style={styles.buttonSecondaryText}>
+                        Pick Origin
                       </Text>
                     </Pressable>
                     <Pressable
-                      style={[
-                        providerStyles.segment,
-                        provider === "osrm"
-                          ? providerStyles.segmentActive
-                          : null,
-                      ]}
-                      onPress={() => {
-                        setProvider("osrm");
-                        setRoute(null);
-                        setRouteError(null);
-                      }}
+                      style={styles.button}
+                      onPress={() => startPickMode("destination")}
                     >
-                      <Text
-                        style={[
-                          providerStyles.segmentText,
-                          provider === "osrm"
-                            ? providerStyles.segmentTextActive
-                            : null,
-                        ]}
-                      >
-                        OSRM
-                      </Text>
+                      <Text style={styles.buttonText}>Pick Destination</Text>
                     </Pressable>
                   </View>
                 </View>
-                {routeError && !isLoadingRoute ? (
-                  <Text style={[styles.bannerBody, { color: "#B91C1C" }]}>
-                    {routeError}
-                  </Text>
-                ) : null}
-                {!routeError && routeSummary ? (
-                  <Text style={styles.bannerBody}>
-                    {routeSummary.distanceText} · {routeSummary.etaText}
-                  </Text>
-                ) : null}
-              </View>
+              ) : null}
+
+              {isRoutingCardVisible ? (
+                <View
+                  style={[styles.banner, { marginHorizontal: 16 }]}
+                  pointerEvents="auto"
+                >
+                  <View style={providerStyles.row}>
+                    <View style={providerStyles.titleRow}>
+                      <Text style={styles.bannerTitle}>Routing Provider</Text>
+                      <View style={panelStyles.bannerHeaderRight}>
+                        {isLoadingRoute ? (
+                          <ActivityIndicator size="small" color="#2563EB" />
+                        ) : null}
+                        <Pressable
+                          style={styles.quickActionButton}
+                          onPress={() => setIsRoutingCardVisible(false)}
+                          hitSlop={10}
+                        >
+                          <MaterialIcons
+                            name="expand-less"
+                            size={18}
+                            color="#111827"
+                          />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    <View style={providerStyles.segmented}>
+                      <Pressable
+                        style={[
+                          providerStyles.segment,
+                          provider === "mapbox"
+                            ? providerStyles.segmentActive
+                            : null,
+                        ]}
+                        onPress={() => {
+                          setProvider("mapbox");
+                          setRoute(null);
+                          setRouteError(null);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            providerStyles.segmentText,
+                            provider === "mapbox"
+                              ? providerStyles.segmentTextActive
+                              : null,
+                          ]}
+                        >
+                          Mapbox
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={[
+                          providerStyles.segment,
+                          provider === "osrm"
+                            ? providerStyles.segmentActive
+                            : null,
+                        ]}
+                        onPress={() => {
+                          setProvider("osrm");
+                          setRoute(null);
+                          setRouteError(null);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            providerStyles.segmentText,
+                            provider === "osrm"
+                              ? providerStyles.segmentTextActive
+                              : null,
+                          ]}
+                        >
+                          OSRM
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {routeError && !isLoadingRoute ? (
+                    <Text style={[styles.bannerBody, { color: "#B91C1C" }]}>
+                      {routeError}
+                    </Text>
+                  ) : null}
+                  {!routeError && routeSummary ? (
+                    <Text style={styles.bannerBody}>
+                      {routeSummary.distanceText} · {routeSummary.etaText}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
 
               {permissionStatus === "denied" ? (
                 <View
@@ -1030,6 +1098,19 @@ const providerStyles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "700",
+  },
+});
+
+const panelStyles = StyleSheet.create({
+  bannerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  bannerHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
 });
 
