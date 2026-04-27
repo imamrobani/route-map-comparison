@@ -7,6 +7,7 @@ import {
   Marker,
   type CameraRef,
   type LngLatBounds,
+  type MapRef,
 } from "@maplibre/maplibre-react-native";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
@@ -77,6 +78,7 @@ function formatRouteSummary(route: OsrmRoute | null) {
 
 export default function MapLibreDemoTilesScreen() {
   const insets = useSafeAreaInsets();
+  const mapRef = useRef<MapRef>(null);
   const cameraRef = useRef<CameraRef>(null);
   const originInputRef = useRef<TextInput>(null);
   const destinationInputRef = useRef<TextInput>(null);
@@ -114,6 +116,9 @@ export default function MapLibreDemoTilesScreen() {
     React.useState<NominatimPlaceSuggestion | null>(null);
   const [destinationPlace, setDestinationPlace] =
     React.useState<NominatimPlaceSuggestion | null>(null);
+  const [pickField, setPickField] = React.useState<
+    "origin" | "destination" | null
+  >(null);
 
   const [route, setRoute] = React.useState<OsrmRoute | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = React.useState(false);
@@ -285,6 +290,61 @@ export default function MapLibreDemoTilesScreen() {
     Keyboard.dismiss();
     resetPlaces();
   }, [resetPlaces]);
+
+  const handleStartPickOnMap = useCallback(() => {
+    const nextField: "origin" | "destination" = activeField
+      ? activeField
+      : originPlace
+        ? "destination"
+        : "origin";
+
+    setPickField(nextField);
+    setActiveField(null);
+    originInputRef.current?.blur();
+    destinationInputRef.current?.blur();
+    Keyboard.dismiss();
+    resetPlaces();
+  }, [activeField, originPlace, resetPlaces]);
+
+  const handleCancelPickOnMap = useCallback(() => {
+    setPickField(null);
+  }, []);
+
+  const handleConfirmPickOnMap = useCallback(() => {
+    if (!pickField) return;
+
+    void (async () => {
+      const center = await mapRef.current?.getCenter();
+      if (!center) return;
+      const [longitude, latitude] = center;
+
+      let placeName = "Pinned location";
+      try {
+        const resolvedName = await reverseNominatim({ latitude, longitude });
+        if (resolvedName) placeName = resolvedName;
+      } catch {
+        placeName = "Pinned location";
+      }
+
+      const suggestion: NominatimPlaceSuggestion = {
+        id: `pinned-${latitude}-${longitude}`,
+        placeName,
+        center: { latitude, longitude },
+      };
+
+      if (pickField === "origin") {
+        setOriginPlace(suggestion);
+        setOriginText(placeName);
+        hasUserEditedRef.current.origin = false;
+      } else {
+        setDestinationPlace(suggestion);
+        setDestinationText(placeName);
+        hasUserEditedRef.current.destination = false;
+      }
+
+      setPickField(null);
+    })();
+  }, [pickField]);
 
   const handleSuggestionPress = useCallback(
     (item: NominatimPlaceSuggestion) => {
@@ -557,7 +617,7 @@ export default function MapLibreDemoTilesScreen() {
 
   return (
     <View style={styles.container}>
-      <Map mapStyle={BASEMAPS[basemapKey].url} style={styles.map}>
+      <Map ref={mapRef} mapStyle={BASEMAPS[basemapKey].url} style={styles.map}>
         <Camera
           ref={cameraRef}
           initialViewState={{
@@ -648,6 +708,18 @@ export default function MapLibreDemoTilesScreen() {
               pointerEvents="auto"
             >
               <MaterialIcons name="layers" size={18} color="#2563EB" />
+            </Pressable>
+            <Pressable
+              style={styles.belowCardIconButton}
+              onPress={handleStartPickOnMap}
+              hitSlop={8}
+              pointerEvents="auto"
+            >
+              <MaterialIcons
+                name="add-location-alt"
+                size={18}
+                color="#2563EB"
+              />
             </Pressable>
             <Pressable
               style={styles.belowCardIconButton}
@@ -744,6 +816,30 @@ export default function MapLibreDemoTilesScreen() {
         >
           <MaterialIcons name="center-focus-strong" size={20} color="#2563EB" />
         </Pressable>
+
+        {pickField ? (
+          <View style={styles.pickOverlay} pointerEvents="box-none">
+            <View style={styles.crosshair} pointerEvents="none">
+              <View style={styles.crosshairDot} />
+            </View>
+            <View style={styles.pickBanner} pointerEvents="none">
+              <Text style={styles.bannerTitle}>
+                Move the map, then tap Confirm to set {pickField}.
+              </Text>
+            </View>
+            <View style={styles.pickActions} pointerEvents="auto">
+              <Pressable
+                style={styles.buttonSecondary}
+                onPress={handleCancelPickOnMap}
+              >
+                <Text style={styles.buttonSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.button} onPress={handleConfirmPickOnMap}>
+                <Text style={styles.buttonText}>Confirm</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
     </View>
   );
