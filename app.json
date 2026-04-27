@@ -33,7 +33,6 @@
     },
     "plugins": [
       "expo-router",
-      "@rnmapbox/maps",
       [
         "expo-location",
         {
@@ -51,7 +50,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true,
