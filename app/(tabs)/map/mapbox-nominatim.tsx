@@ -635,8 +635,9 @@ export default function MapboxNominatimMapScreen() {
       <View style={styles.container}>
         <Text style={styles.title}>Map</Text>
         <Text style={styles.body}>
-          Missing Mapbox token. Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN in
-          .env.local, then restart the dev server.
+          Missing Mapbox token. Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN at build
+          time (dev: .env.local, builds: .env.production.local or EAS env), then
+          rebuild the app.
         </Text>
       </View>
     );

@@ -97,19 +97,32 @@ export function MapSearchCard<Suggestion extends MapSearchSuggestion>({
               color="#2563EB"
             />
           </View>
-          <TextInput
-            ref={originInputRef}
-            value={originText}
-            onChangeText={onOriginChangeText}
-            placeholder="Search origin"
-            placeholderTextColor="#9CA3AF"
-            style={styles.searchInput}
-            onFocus={onOriginFocus}
-            onBlur={onOriginBlur}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-          />
+          {activeField === "origin" ? (
+            <TextInput
+              ref={originInputRef}
+              value={originText}
+              onChangeText={onOriginChangeText}
+              placeholder="Search origin"
+              placeholderTextColor="#9CA3AF"
+              style={styles.searchInput}
+              onFocus={onOriginFocus}
+              onBlur={onOriginBlur}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              autoFocus
+            />
+          ) : (
+            <Pressable style={styles.displayField} onPress={onOriginFocus}>
+              <Text
+                style={originText.length > 0 ? styles.searchInput : styles.placeholderText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {originText.length > 0 ? originText : "Search origin"}
+              </Text>
+            </Pressable>
+          )}
           {activeField === "origin" && originText.length > 0 ? (
             <Pressable
               style={styles.clearButton}
@@ -145,19 +158,41 @@ export function MapSearchCard<Suggestion extends MapSearchSuggestion>({
           <View style={styles.inputIcon}>
             <MaterialIcons name="place" size={18} color="#F97316" />
           </View>
-          <TextInput
-            ref={destinationInputRef}
-            value={destinationText}
-            onChangeText={onDestinationChangeText}
-            placeholder="Search destination"
-            placeholderTextColor="#9CA3AF"
-            style={styles.searchInput}
-            onFocus={onDestinationFocus}
-            onBlur={onDestinationBlur}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-          />
+          {activeField === "destination" ? (
+            <TextInput
+              ref={destinationInputRef}
+              value={destinationText}
+              onChangeText={onDestinationChangeText}
+              placeholder="Search destination"
+              placeholderTextColor="#9CA3AF"
+              style={styles.searchInput}
+              onFocus={onDestinationFocus}
+              onBlur={onDestinationBlur}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              autoFocus
+            />
+          ) : (
+            <Pressable
+              style={styles.displayField}
+              onPress={onDestinationFocus}
+            >
+              <Text
+                style={
+                  destinationText.length > 0
+                    ? styles.searchInput
+                    : styles.placeholderText
+                }
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {destinationText.length > 0
+                  ? destinationText
+                  : "Search destination"}
+              </Text>
+            </Pressable>
+          )}
           {activeField === "destination" && destinationText.length > 0 ? (
             <Pressable
               style={styles.clearButton}
@@ -241,6 +276,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     paddingVertical: 0,
     paddingHorizontal: 0,
+    flex: 1,
+  },
+  displayField: {
+    flex: 1,
+    minHeight: 18,
+    justifyContent: "center",
+  },
+  placeholderText: {
+    color: "#9CA3AF",
+    fontSize: 14,
+    fontWeight: "600",
     flex: 1,
   },
   clearButton: {
