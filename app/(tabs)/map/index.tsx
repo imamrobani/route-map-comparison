@@ -35,16 +35,6 @@ export default function MapMenuScreen() {
       </ThemedView>
 
       <ThemedView style={styles.list}>
-        {/* <MenuItem
-          href="/map/mapbox"
-          title="Mapbox (Baseline)"
-          description="Current implementation using @rnmapbox/maps."
-        />
-        <MenuItem
-          href={"/map/mapbox-nominatim" as Href}
-          title="Mapbox + Nominatim (Hybrid)"
-          description="Mapbox map with free Nominatim autocomplete; routing provider can switch."
-        /> */}
         <MenuItem
           href={"/map/maplibre-demotiles" as Href}
           title="MapLibre (Demo Tiles)"
